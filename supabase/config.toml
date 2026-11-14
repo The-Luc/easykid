@@ -1,0 +1,18 @@
+# Minimal Supabase config for the EasyKid project.
+#
+# `supabase config push` writes every property declared here to the hosted
+# project and leaves everything NOT declared untouched. Keep this file small
+# on purpose: only declare settings we want to manage from code.
+
+project_id = "ozftuzwtbkwxskiiapjm"
+
+[auth]
+site_url = "https://easykid.vercel.app"
+additional_redirect_urls = ["http://localhost:5173"]
+minimum_password_length = 8
+
+# Email + password login. The free plan's built-in email sender only delivers to
+# members of the Supabase organization, so a confirmation email would never reach
+# a partner. With confirmations off, sign-up logs the user in immediately.
+[auth.email]
+enable_confirmations = false
