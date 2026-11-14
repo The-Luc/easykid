@@ -1,0 +1,45 @@
+export type PhaseType = 'eat' | 'activity' | 'sleep' | 'you'
+export type EventType = PhaseType | 'diaper'
+
+export interface EventDetails {
+  /** How the feed happened. `ml` is only meaningful for `bottle`. */
+  side?: 'left' | 'right' | 'both' | 'bottle'
+  ml?: number
+  diaper?: 'wet' | 'dirty' | 'both'
+}
+
+export interface Profile {
+  name: string
+  /** yyyy-MM-dd, or '' when not set */
+  birthDate: string
+}
+
+export interface Measurement {
+  id: string
+  /** yyyy-MM-dd */
+  date: string
+  weightKg?: number
+  lengthCm?: number
+  headCm?: number
+}
+
+export interface Appointment {
+  id: string
+  /** yyyy-MM-dd */
+  date: string
+  kind: 'vaccine' | 'visit'
+  title: string
+  done: boolean
+  notes?: string
+}
+
+export interface BabyEvent {
+  id: string
+  type: EventType
+  /** epoch milliseconds */
+  startedAt: number
+  /** epoch milliseconds; null while the phase is still running */
+  endedAt: number | null
+  details: EventDetails
+  notes?: string
+}

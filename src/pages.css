@@ -1,0 +1,249 @@
+/* ---------- Shared bits ---------- */
+.centered {
+  text-align: center;
+  justify-self: center;
+  align-self: center;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.row-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+.btn-pill.sm {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.date-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+}
+
+.date-input:focus {
+  outline: 2px solid var(--sleep);
+  outline-offset: 1px;
+}
+
+.error {
+  color: #e5484d;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.notice {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--you-soft);
+  font-size: 14px;
+}
+
+/* ---------- Highlight stat grid ---------- */
+.highlights {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.highlights.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.delta {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--activity);
+}
+
+.delta.down {
+  color: var(--eat);
+}
+
+/* ---------- Charts ---------- */
+.chart {
+  height: 180px;
+  margin-top: 8px;
+}
+
+.chart-empty {
+  padding: 28px 0 8px;
+  text-align: center;
+}
+
+/* ---------- Timeline ---------- */
+.timeline {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tl-track {
+  position: relative;
+  height: 44px;
+  border-radius: 12px;
+  background:
+    linear-gradient(to right, var(--line) 1px, transparent 1px) 25% 0 / 25% 100% repeat-x,
+    var(--surface-2);
+  overflow: hidden;
+}
+
+.tl-seg {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  border-radius: 6px;
+}
+
+.tl-seg.eat {
+  background: var(--eat);
+}
+.tl-seg.activity {
+  background: var(--activity);
+  opacity: 0.8;
+}
+.tl-seg.sleep {
+  background: var(--sleep);
+}
+.tl-seg.you {
+  background: var(--you);
+}
+
+.tl-dot {
+  position: absolute;
+  top: 2px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.tl-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.tl-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: baseline;
+}
+
+.tl-legend i.eat {
+  background: var(--eat);
+}
+.tl-legend i.activity {
+  background: var(--activity);
+}
+.tl-legend i.sleep {
+  background: var(--sleep);
+}
+.tl-legend i.dot {
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+/* ---------- Growth rows ---------- */
+.event.plain {
+  grid-template-columns: 1fr 14px;
+}
+
+.appts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.appt {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.appt:first-child {
+  border-top: 0;
+}
+
+.check {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+}
+
+.check.on {
+  border-color: var(--activity);
+  background: var(--activity);
+}
+
+.appt-main {
+  display: grid;
+  gap: 2px;
+  padding: 6px 0;
+  text-align: left;
+}
+
+.appt-title {
+  font-weight: 650;
+}
+
+.appt-sub {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.appt-sub.overdue {
+  color: #e5484d;
+  font-weight: 650;
+}
