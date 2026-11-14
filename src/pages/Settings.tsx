@@ -1,7 +1,9 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { format } from 'date-fns'
+import AccountCard from '../components/AccountCard'
 import PageHead from '../components/PageHead'
 import { ageLabel } from '../lib/age'
+import { cloudStore } from '../lib/cloud'
 import { buildBackup, parseBackup, type Backup } from '../lib/backup'
 import { useEvents, useNow, useStore } from '../lib/hooks'
 import { eventStore } from '../lib/store'
@@ -15,6 +17,7 @@ import type { Profile } from '../types'
 
 export default function Settings() {
   const profile = useStore(profileStore)
+  const cloud = useStore(cloudStore)
   const events = useEvents()
   const growth = useStore(growthStore)
   const appointments = useStore(appointmentStore)
@@ -78,6 +81,8 @@ export default function Settings() {
     <>
       <PageHead eyebrow="Your baby" title="Settings" />
       <div className="stack">
+        <AccountCard />
+
         <section className="card form">
           <h2>Baby 👶</h2>
           <label className="field">
@@ -110,8 +115,10 @@ export default function Settings() {
         <section className="card form">
           <h2>Your data 💾</h2>
           <p className="muted small">
-            Everything is stored on this device only. Export a backup now and then, or to
-            move to a new phone. {events.length} entries, {growth.length} measurements and{' '}
+            {cloud.phase === 'ready'
+              ? 'Your data is saved on this phone and synced to the cloud. A backup file is an extra safety copy.'
+              : 'Your data is stored on this device only. Export a backup now and then, or to move to a new phone.'}{' '}
+            {events.length} entries, {growth.length} measurements and{' '}
             {appointments.length} appointments saved.
           </p>
           <div className="row-2">
@@ -139,7 +146,8 @@ export default function Settings() {
                 {pending.exportedAt ? format(pending.exportedAt, 'MMM d, yyyy') : 'unknown date'}:{' '}
                 {pending.events.length} entries, {pending.growth.length} measurements,{' '}
                 {pending.appointments.length} appointments. Importing{' '}
-                <strong>replaces</strong> what is on this device.
+                <strong>replaces</strong> what is on this device
+                {cloud.phase === 'ready' ? ' and, through sync, on your partner’s phone too' : ''}.
               </p>
               <div className="row-2">
                 <button type="button" className="btn btn-primary" onClick={applyImport}>
@@ -153,7 +161,11 @@ export default function Settings() {
           )}
 
           <button type="button" className="btn btn-danger" onClick={clearAll}>
-            {confirmClear ? 'Tap again to erase everything' : 'Clear all data'}
+            {confirmClear
+              ? cloud.phase === 'ready'
+                ? 'Tap again to erase everything (also for your partner)'
+                : 'Tap again to erase everything'
+              : 'Clear all data'}
           </button>
           {confirmClear && (
             <button type="button" className="link-btn centered" onClick={() => setConfirmClear(false)}>
@@ -162,13 +174,6 @@ export default function Settings() {
           )}
         </section>
 
-        <section className="card">
-          <h2>Partner 👪</h2>
-          <p className="muted">
-            Sharing the log with your partner arrives with cloud sync. Until then, each
-            device keeps its own data.
-          </p>
-        </section>
       </div>
     </>
   )

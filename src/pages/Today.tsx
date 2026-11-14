@@ -6,6 +6,7 @@ import Chips from '../components/Chips'
 import DayStats from '../components/DayStats'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
+import SyncPill from '../components/SyncPill'
 import { daySummary, eventsOnDay, getOpenPhase } from '../lib/events'
 import { formatClock, formatDuration, formatTime } from '../lib/format'
 import { useEvents, useNow, useStore } from '../lib/hooks'
@@ -75,9 +76,12 @@ export default function Today() {
         }
         title={format(now, 'EEEE, MMM d')}
         action={
-          <button type="button" className="btn-pill" onClick={() => setSheet({})}>
-            + Add
-          </button>
+          <div className="head-actions">
+            <SyncPill />
+            <button type="button" className="btn-pill" onClick={() => setSheet({})}>
+              + Add
+            </button>
+          </div>
         }
       />
       <div className="stack">
