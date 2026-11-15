@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { format, isToday, isYesterday } from 'date-fns'
 
 /** Running timer: 12:34 or 1:02:03 */
 export function formatClock(ms: number): string {
@@ -22,4 +22,10 @@ export function formatDuration(ms: number): string {
 
 export function formatTime(ms: number): string {
   return format(ms, 'h:mm a')
+}
+
+/** "today 7:10 AM", "yesterday 10:40 PM", "Sat 7:05 AM" */
+export function formatWhen(ms: number): string {
+  const day = isToday(ms) ? 'today' : isYesterday(ms) ? 'yesterday' : format(ms, 'EEE d MMM')
+  return `${day} ${format(ms, 'h:mm a')}`
 }

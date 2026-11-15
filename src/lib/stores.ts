@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import type { Appointment, Measurement, Profile } from '../types'
+import type { Appointment, MilkBag, Measurement, Profile } from '../types'
 import { newId } from './id'
 import { createPersisted } from './persist'
 
@@ -12,6 +12,8 @@ export const appointmentStore = createPersisted<Appointment[]>(
   'easykid.appointments.v1',
   [],
 )
+
+export const bagStore = createPersisted<MilkBag[]>('easykid.bags.v1', [])
 
 /** yyyy-MM-dd in local time */
 export const isoDate = (ms: number) => format(ms, 'yyyy-MM-dd')
@@ -46,5 +48,39 @@ export const appointmentActions = {
   },
   remove(id: string) {
     appointmentStore.set(appointmentStore.getSnapshot().filter((x) => x.id !== id))
+  },
+}
+
+/** Bags of pumped milk. Whether a bag is used is derived from the feeds (lib/storage.ts). */
+export const bagActions = {
+  add(bag: Omit<MilkBag, 'id'>) {
+    const id = newId()
+    bagStore.set([...bagStore.getSnapshot(), { ...bag, id }])
+    return id
+  },
+  addMany(bags: Omit<MilkBag, 'id'>[]) {
+    bagStore.set([...bagStore.getSnapshot(), ...bags.map((b) => ({ ...b, id: newId() }))])
+  },
+  update(id: string, bag: Omit<MilkBag, 'id'>) {
+    bagStore.set(bagStore.getSnapshot().map((x) => (x.id === id ? { ...bag, id } : x)))
+  },
+  /** Throw a bag away (spoiled or degraded). Undone with `restore`. */
+  discard(id: string, at: number) {
+    bagStore.set(
+      bagStore.getSnapshot().map((x) => (x.id === id ? { ...x, discardedAt: at } : x)),
+    )
+  },
+  restore(id: string) {
+    bagStore.set(
+      bagStore.getSnapshot().map((x) => {
+        if (x.id !== id) return x
+        const { discardedAt: _gone, ...rest } = x
+        void _gone
+        return rest
+      }),
+    )
+  },
+  remove(id: string) {
+    bagStore.set(bagStore.getSnapshot().filter((x) => x.id !== id))
   },
 }

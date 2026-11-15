@@ -318,3 +318,45 @@ alter table public.events drop constraint if exists events_type_check;
 alter table public.events
   add constraint events_type_check
   check (type in ('eat', 'activity', 'sleep', 'you', 'diaper', 'pump'));
+
+-- ---------------------------------------------------------------------------
+-- Migration 2: milk storage (bags of pumped milk).
+-- Whether a bag has been used is NOT stored here: it is derived from the feeds that list
+-- the bag in their `details`, so the stash can never disagree with the feeding log.
+-- Safe to re-run. Run this BEFORE deploying an app version that syncs bags.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.milk_bags (
+  id            uuid primary key,
+  baby_id       uuid not null references public.babies (id) on delete cascade,
+  pumped_at     timestamptz not null,
+  volume_ml     integer not null check (volume_ml > 0 and volume_ml <= 2000),
+  location      text not null check (location in ('freezer', 'fridge')),
+  discarded_at  timestamptz,
+  notes         text,
+  created_by    uuid default auth.uid() references auth.users (id),
+  updated_at    timestamptz not null default now(),
+  deleted_at    timestamptz
+);
+
+create index if not exists milk_bags_baby_updated_idx on public.milk_bags (baby_id, updated_at);
+
+drop trigger if exists touch_milk_bags on public.milk_bags;
+create trigger touch_milk_bags before insert or update on public.milk_bags
+  for each row execute function public.touch_updated_at();
+
+alter table public.milk_bags enable row level security;
+drop policy if exists milk_bags_all on public.milk_bags;
+create policy milk_bags_all on public.milk_bags for all to authenticated
+  using (public.is_member(baby_id)) with check (public.is_member(baby_id));
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'milk_bags'
+  ) then
+    alter publication supabase_realtime add table public.milk_bags;
+  end if;
+end;
+$$;

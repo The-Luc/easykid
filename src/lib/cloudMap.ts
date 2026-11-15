@@ -1,4 +1,4 @@
-import type { Appointment, BabyEvent, EventDetails, Measurement, Profile } from '../types'
+import type { Appointment, BabyEvent, EventDetails, Measurement, MilkBag, Profile } from '../types'
 
 /** Row shapes as stored in Supabase (snake_case, timestamps as ISO strings). */
 export interface EventRow {
@@ -31,6 +31,18 @@ export interface AppointmentRow {
   kind: Appointment['kind']
   title: string
   done: boolean
+  notes: string | null
+  updated_at?: string
+  deleted_at?: string | null
+}
+
+export interface BagRow {
+  id: string
+  baby_id: string
+  pumped_at: string
+  volume_ml: number
+  location: MilkBag['location']
+  discarded_at: string | null
   notes: string | null
   updated_at?: string
   deleted_at?: string | null
@@ -127,4 +139,29 @@ export function profileToRow(p: Profile) {
 
 export function rowToProfile(r: BabyRow): Profile {
   return { name: r.name ?? '', birthDate: r.birth_date ?? '' }
+}
+
+export function bagToRow(b: MilkBag, babyId: string) {
+  return {
+    id: b.id,
+    baby_id: babyId,
+    pumped_at: iso(b.pumpedAt),
+    volume_ml: Math.round(b.volumeMl),
+    location: b.location,
+    // null (not undefined) so that "put back" on one phone clears it everywhere
+    discarded_at: b.discardedAt === undefined ? null : iso(b.discardedAt),
+    notes: b.notes ?? null,
+    deleted_at: null,
+  }
+}
+
+export function rowToBag(r: BagRow): MilkBag {
+  return {
+    id: r.id,
+    pumpedAt: Date.parse(r.pumped_at),
+    volumeMl: r.volume_ml,
+    location: r.location,
+    ...(r.discarded_at ? { discardedAt: Date.parse(r.discarded_at) } : {}),
+    ...(r.notes ? { notes: r.notes } : {}),
+  }
 }

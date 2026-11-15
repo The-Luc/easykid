@@ -451,3 +451,228 @@
 .tl-legend i.pump {
   background: var(--pump);
 }
+
+/* ---------- Milk storage ---------- */
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.btn-pill.ghost {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.milk-section {
+  display: grid;
+  gap: 8px;
+}
+
+.bag-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.bag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.bag-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.bag-row.on {
+  border-color: var(--pump);
+  background: var(--pump-soft);
+}
+
+.bag-check {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: #fff;
+  font-weight: 800;
+}
+
+.bag-row.on .bag-check {
+  border-color: var(--pump);
+  background: var(--pump);
+}
+
+.bag-main {
+  display: grid;
+  gap: 1px;
+}
+
+.bag-vol {
+  font-weight: 750;
+}
+
+.bag-sub {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.bag-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--you-soft);
+  color: #b7791f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bag-badge.expired {
+  background: var(--eat-soft);
+  color: #e5484d;
+}
+
+.bag-total {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bag-empty {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+/* the same picker on the colored running-timer card */
+.current .field-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.current .bag-row {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.current .bag-row.on {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+}
+
+.current .bag-sub,
+.current .bag-total {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.current .bag-row.on .bag-sub {
+  color: #77737f;
+}
+
+.current .bag-check {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+}
+
+.current .bag-row.on .bag-check {
+  border-color: var(--pump);
+  background: var(--pump);
+}
+
+.current .bag-empty {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Today card and the Storage page */
+.stash-card {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.stash-main {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.stash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.stash-bag {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.stash-bag:first-child {
+  border-top: 0;
+}
+
+.stash-bag-main {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.bag-useby {
+  color: var(--activity);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.bag-useby.soon {
+  color: #b7791f;
+}
+
+.bag-useby.expired {
+  color: #e5484d;
+}
+
+.stash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stash-bag.compact {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Selected chips and bag rows on the colored timer card are white, so their text must stay
+   dark in dark mode too (the theme's text color would be white on white). */
+.current .chip.selected,
+.current .bag-row.on {
+  color: #2b2a33;
+}
+
+/* the three diaper buttons are narrow on a phone: keep emoji and label on one line */
+.row-3 .btn {
+  padding: 0 6px;
+  white-space: nowrap;
+}

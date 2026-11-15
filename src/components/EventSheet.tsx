@@ -1,18 +1,24 @@
 import { useState } from 'react'
 import { format, isSameDay } from 'date-fns'
 import Chips from './Chips'
+import MilkSection from './MilkSection'
 import Sheet from './Sheet'
 import TimeField from './TimeField'
 import WheelField from './WheelField'
 import { isPhase, lastPumpMl } from '../lib/events'
 import { formatDuration, formatTime } from '../lib/format'
+import { useEvents, useStore } from '../lib/hooks'
 import { EVENT_EMOJI, EVENT_LABEL } from '../lib/meta'
 import { eventStore } from '../lib/store'
+import { availableBags, splitVolume, volumeOf } from '../lib/storage'
+import { bagActions, bagStore } from '../lib/stores'
 import { clampDuration, resolveSpan, switchAnchor, type Anchor } from '../lib/times'
 import type { BabyEvent, EventDetails, EventType } from '../types'
 
 type Side = NonNullable<EventDetails['side']>
 type Diaper = NonNullable<EventDetails['diaper']>
+type Milk = NonNullable<EventDetails['milk']>
+type StoreAs = 'freezer' | 'fridge' | 'none'
 
 const ADD_TYPES: { value: EventType; label: string }[] = (
   ['eat', 'diaper', 'sleep', 'activity', 'you', 'pump'] as const
@@ -38,6 +44,15 @@ const PUMP_SIDES: { value: Side; label: string }[] = [
   { value: 'right', label: 'Right' },
 ]
 
+// Most pumped milk goes in the freezer, so that is preselected; the fridge is for same-day use
+const STORAGE: { value: StoreAs; label: string }[] = [
+  { value: 'freezer', label: '🧊 Freezer' },
+  { value: 'fridge', label: 'Fridge' },
+  { value: 'none', label: "Don't store" },
+]
+
+const BAG_COUNTS = [1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))
+
 const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'start', label: 'Started' },
   { value: 'end', label: 'Ended' },
@@ -59,18 +74,25 @@ const DEFAULT_DURATION: Record<EventType, number> = {
 export default function EventSheet({
   event,
   initialType,
+  initialDetails,
   defaultEnd,
   onClose,
 }: {
   event?: BabyEvent
   /** Type preselected for a new entry (for example when tapping the A or Y tile) */
   initialType?: EventType
+  /** Details preselected for a new entry (for example using a stored bag from the Storage page) */
+  initialDetails?: EventDetails
   /** Initial time for a new entry (defaults to now) */
   defaultEnd?: number
   onClose: () => void
 }) {
   const editing = event !== undefined
   const running = event !== undefined && event.endedAt === null && isPhase(event.type)
+
+  const events = useEvents()
+  const bags = useStore(bagStore)
+  const [now] = useState(() => Date.now())
 
   const startType: EventType = event?.type ?? initialType ?? 'eat'
   const [type, setType] = useState<EventType>(startType)
@@ -93,11 +115,20 @@ export default function EventSheet({
   const [side, setSide] = useState<Side | undefined>(
     event
       ? (event.details.side ?? (event.type === 'eat' && event.details.ml ? 'bottle' : undefined))
-      : startType === 'pump'
-        ? 'both'
-        : undefined,
+      : (initialDetails?.side ?? (startType === 'pump' ? 'both' : undefined)),
   )
-  const [ml, setMl] = useState(event?.details.ml ?? (startType === 'pump' ? pumpDefault : 90))
+  const [ml, setMl] = useState(
+    event?.details.ml ?? initialDetails?.ml ?? (startType === 'pump' ? pumpDefault : 90),
+  )
+  const [milk, setMilk] = useState<Milk | undefined>(
+    event?.details.milk ?? initialDetails?.milk,
+  )
+  const [bagIds, setBagIds] = useState<string[]>(
+    event?.details.bagIds ?? initialDetails?.bagIds ?? [],
+  )
+  const [felt, setFelt] = useState(event?.details.full ?? false)
+  const [storeAs, setStoreAs] = useState<StoreAs>('freezer')
+  const [bagCount, setBagCount] = useState(1)
   const [diaper, setDiaper] = useState<Diaper>(event?.details.diaper ?? 'wet')
   const [notes, setNotes] = useState(event?.notes ?? '')
   // The note box starts open for a new pump (notes like "left side sore" are common)
@@ -105,6 +136,9 @@ export default function EventSheet({
     Boolean(event?.notes) || (!event && startType === 'pump'),
   )
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Bags that can be picked for this feed. Its own bags stay on offer so they can be unticked.
+  const candidates = availableBags(bags, events, event?.id)
 
   const hasDuration = type !== 'diaper' && !running
   const timeLabel = running
@@ -125,7 +159,30 @@ export default function EventSheet({
     // Side and amount mean different things for a feed and a pump session: start fresh
     setSide(t === 'pump' ? 'both' : undefined)
     setMl(t === 'pump' ? pumpDefault : 90)
+    setMilk(undefined)
+    setBagIds([])
+    setFelt(false)
     if (t === 'pump') setShowNote(true)
+  }
+
+  // Leaving "Bottle" forgets the milk choice and bags
+  const changeSide = (next: Side | undefined) => {
+    setSide(next)
+    if (next !== 'bottle') {
+      setMilk(undefined)
+      setBagIds([])
+    }
+  }
+
+  const changeMilk = (next: Milk | undefined) => {
+    setMilk(next)
+    if (next !== 'pumped') setBagIds([])
+  }
+
+  // Ticking bags fills in the amount (you can still adjust it afterwards)
+  const changeBags = (ids: string[]) => {
+    setBagIds(ids)
+    if (ids.length > 0) setMl(volumeOf(candidates, ids))
   }
 
   // Changing the duration only ever moves the calculated time. When the start is the
@@ -161,12 +218,17 @@ export default function EventSheet({
     const details: EventDetails = {}
     if (type === 'eat' && side) {
       details.side = side
-      if (side === 'bottle') details.ml = ml
+      if (side === 'bottle') {
+        details.ml = ml
+        if (milk) details.milk = milk
+        if (milk === 'pumped' && bagIds.length > 0) details.bagIds = bagIds
+      }
     }
     if (type === 'diaper') details.diaper = diaper
     if (type === 'pump') {
       details.side = side && side !== 'bottle' ? side : 'both'
       details.ml = ml
+      if (felt) details.full = true
     }
     const note = notes.trim() || undefined
 
@@ -182,6 +244,17 @@ export default function EventSheet({
       }
       if (event) eventStore.update(event.id, payload)
       else eventStore.add(payload)
+
+      // A new pump can go straight into storage: one bag per part, dated when the pump ended
+      if (type === 'pump' && !event && storeAs !== 'none') {
+        bagActions.addMany(
+          splitVolume(ml, bagCount).map((volumeMl) => ({
+            pumpedAt: span.endedAt,
+            volumeMl,
+            location: storeAs,
+          })),
+        )
+      }
     }
     onClose()
   }
@@ -201,114 +274,163 @@ export default function EventSheet({
       title={editing ? `Edit ${EVENT_LABEL[type].toLowerCase()}` : 'Add entry'}
       onClose={onClose}
     >
-        <div className="sheet-body">
-          {!editing && (
-            <Chips options={ADD_TYPES} value={type} onChange={(v) => v && changeType(v)} />
-          )}
+      <div className="sheet-body">
+        {!editing && (
+          <Chips options={ADD_TYPES} value={type} onChange={(v) => v && changeType(v)} />
+        )}
 
-          {type === 'eat' && (
-            <div className="field">
-              <span className="field-label">How</span>
-              <Chips options={SIDES} value={side} onChange={setSide} clearable />
-            </div>
-          )}
+        {type === 'eat' && (
+          <div className="field">
+            <span className="field-label">How</span>
+            <Chips options={SIDES} value={side} onChange={changeSide} clearable />
+          </div>
+        )}
 
-          {type === 'eat' && side === 'bottle' && (
+        {type === 'eat' && side === 'bottle' && (
+          <>
+            <MilkSection
+              milk={milk}
+              bagIds={bagIds}
+              bags={candidates}
+              now={now}
+              onMilk={changeMilk}
+              onBags={changeBags}
+            />
             <WheelField
               label="Amount"
               value={ml}
-              max={400}
+              max={600}
               step={5}
               unit="ml"
               onChange={setMl}
             />
-          )}
+          </>
+        )}
 
-          {type === 'pump' && (
-            <>
-              <div className="field">
-                <span className="field-label">Side</span>
-                <Chips
-                  options={PUMP_SIDES}
-                  value={side}
-                  onChange={(v) => v && setSide(v)}
-                />
-              </div>
-              <WheelField
-                label="Amount"
-                value={ml}
-                max={500}
-                step={5}
-                unit="ml"
-                onChange={setMl}
-              />
-            </>
-          )}
-
-          {type === 'diaper' && (
+        {type === 'pump' && (
+          <>
             <div className="field">
-              <span className="field-label">Type</span>
-              <Chips options={DIAPERS} value={diaper} onChange={(v) => v && setDiaper(v)} />
-            </div>
-          )}
-
-          {hasDuration && (
-            <WheelField
-              label="How long"
-              value={duration}
-              max={type === 'eat' || type === 'pump' ? 90 : 720}
-              step={type === 'eat' || type === 'pump' ? 1 : 5}
-              unit="min"
-              hint={duration >= 60 ? `= ${formatDuration(duration * 60_000)}` : undefined}
-              onChange={changeDuration}
-            />
-          )}
-
-          {hasDuration && (
-            <div className="field">
-              <span className="field-label">Which time do you know?</span>
+              <span className="field-label">Side</span>
               <Chips
-                options={ANCHORS}
-                value={anchor}
-                onChange={(a) => a && changeAnchor(a)}
+                options={PUMP_SIDES}
+                value={side}
+                onChange={(v) => v && setSide(v)}
               />
             </div>
-          )}
-
-          <TimeField label={timeLabel} value={anchorAt} onChange={changeAnchorAt} />
-
-          {hasDuration && (
-            <p className="calc-line">
-              {otherLabel} <strong>{otherText}</strong> · calculated from the duration
-              {capped && ' · capped so it does not end in the future'}
-            </p>
-          )}
-
-          {showNote ? (
-            <input
-              className="input"
-              type="text"
-              placeholder="Add a note (optional)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+            <div className="field">
+              <span className="field-label">How did it feel?</span>
+              <div className="chips">
+                <button
+                  type="button"
+                  className={`chip${felt ? ' selected' : ''}`}
+                  aria-pressed={felt}
+                  onClick={() => setFelt(!felt)}
+                >
+                  Felt full
+                </button>
+              </div>
+            </div>
+            <WheelField
+              label="Amount"
+              value={ml}
+              max={500}
+              step={5}
+              unit="ml"
+              onChange={setMl}
             />
-          ) : (
-            <button type="button" className="link-btn" onClick={() => setShowNote(true)}>
-              + Add note
-            </button>
-          )}
-        </div>
+            {!editing && (
+              <div className="field">
+                <span className="field-label">Storage</span>
+                <Chips
+                  options={STORAGE}
+                  value={storeAs}
+                  onChange={(v) => v && setStoreAs(v)}
+                />
+                {storeAs !== 'none' && (
+                  <>
+                    <span className="field-label">Bags</span>
+                    <Chips
+                      options={BAG_COUNTS}
+                      value={bagCount}
+                      onChange={(v) => v && setBagCount(v)}
+                    />
+                    <p className="muted small">
+                      {splitVolume(ml, bagCount)
+                        .map((v) => `${v} ml`)
+                        .join(' + ')}{' '}
+                      → {storeAs}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
-        <div className="sheet-foot">
-          <button type="button" className="btn btn-primary" onClick={save}>
-            {editing ? 'Save changes' : 'Add'}
+        {type === 'diaper' && (
+          <div className="field">
+            <span className="field-label">Type</span>
+            <Chips options={DIAPERS} value={diaper} onChange={(v) => v && setDiaper(v)} />
+          </div>
+        )}
+
+        {hasDuration && (
+          <WheelField
+            label="How long"
+            value={duration}
+            max={type === 'eat' || type === 'pump' ? 90 : 720}
+            step={type === 'eat' || type === 'pump' ? 1 : 5}
+            unit="min"
+            hint={duration >= 60 ? `= ${formatDuration(duration * 60_000)}` : undefined}
+            onChange={changeDuration}
+          />
+        )}
+
+        {hasDuration && (
+          <div className="field">
+            <span className="field-label">Which time do you know?</span>
+            <Chips
+              options={ANCHORS}
+              value={anchor}
+              onChange={(a) => a && changeAnchor(a)}
+            />
+          </div>
+        )}
+
+        <TimeField label={timeLabel} value={anchorAt} onChange={changeAnchorAt} />
+
+        {hasDuration && (
+          <p className="calc-line">
+            {otherLabel} <strong>{otherText}</strong> · calculated from the duration
+            {capped && ' · capped so it does not end in the future'}
+          </p>
+        )}
+
+        {showNote ? (
+          <input
+            className="input"
+            type="text"
+            placeholder="Add a note (optional)"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        ) : (
+          <button type="button" className="link-btn" onClick={() => setShowNote(true)}>
+            + Add note
           </button>
-          {editing && (
-            <button type="button" className="btn btn-danger" onClick={remove}>
-              {confirmDelete ? 'Tap again to delete' : 'Delete'}
-            </button>
-          )}
-        </div>
+        )}
+      </div>
+
+      <div className="sheet-foot">
+        <button type="button" className="btn btn-primary" onClick={save}>
+          {editing ? 'Save changes' : 'Add'}
+        </button>
+        {editing && (
+          <button type="button" className="btn btn-danger" onClick={remove}>
+            {confirmDelete ? 'Tap again to delete' : 'Delete'}
+          </button>
+        )}
+      </div>
     </Sheet>
   )
 }

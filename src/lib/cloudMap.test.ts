@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Appointment, BabyEvent, Measurement } from '../types'
+import type { Appointment, BabyEvent, Measurement, MilkBag } from '../types'
 import {
+  bagToRow,
+  rowToBag,
   appointmentToRow,
   eventToRow,
   measurementToRow,
@@ -90,5 +92,27 @@ describe('profile', () => {
       name: '',
       birthDate: '',
     })
+  })
+})
+
+describe('milk bags', () => {
+  const bag: MilkBag = {
+    id: 'bag-1',
+    pumpedAt: Date.parse('2026-11-14T07:10:00.000Z'),
+    volumeMl: 120,
+    location: 'freezer',
+    notes: 'first bag',
+  }
+
+  it('round-trips through a database row', () => {
+    expect(rowToBag(bagToRow(bag, BABY) as never)).toEqual(bag)
+  })
+
+  it('stores "not thrown away" as null so putting a bag back clears it everywhere', () => {
+    expect(bagToRow(bag, BABY).discarded_at).toBeNull()
+    const thrown = { ...bag, discardedAt: Date.parse('2026-11-15T08:00:00.000Z') }
+    const row = bagToRow(thrown, BABY)
+    expect(row.discarded_at).toBe('2026-11-15T08:00:00.000Z')
+    expect(rowToBag(row as never).discardedAt).toBe(thrown.discardedAt)
   })
 })

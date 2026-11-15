@@ -11,6 +11,7 @@ const sample = buildBackup(
     appointments: [
       { id: 'a', date: '2026-12-01', kind: 'vaccine', title: 'Hep B', done: false },
     ],
+    bags: [{ id: 'b1', pumpedAt: 5, volumeMl: 120, location: 'freezer' }],
   },
   1000,
 )
@@ -48,5 +49,23 @@ describe('breast pump entries', () => {
       1000,
     )
     expect(parseBackup(JSON.stringify(withPump)).ok).toBe(true)
+  })
+})
+
+describe('milk bags in a backup', () => {
+  it('are restored, and an older backup with no bags still imports', () => {
+    const withBags = parseBackup(JSON.stringify(sample))
+    expect(withBags.ok && withBags.backup.bags).toEqual(sample.bags)
+
+    const { bags: _bags, ...older } = sample
+    void _bags
+    const result = parseBackup(JSON.stringify(older))
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.backup.bags).toEqual([])
+  })
+
+  it('rejects a bag with the wrong shape', () => {
+    const bad = { ...sample, bags: [{ id: 'x', volumeMl: 'lots' }] }
+    expect(parseBackup(JSON.stringify(bad))).toMatchObject({ ok: false })
   })
 })

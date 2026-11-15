@@ -7,6 +7,12 @@ export interface EventDetails {
   side?: 'left' | 'right' | 'both' | 'bottle'
   ml?: number
   diaper?: 'wet' | 'dirty' | 'both'
+  /** Bottle feeds: formula, or pumped breast milk (optionally taken from stored bags). */
+  milk?: 'formula' | 'pumped'
+  /** The stored bags this feed used. A bag counts as "used" because a feed lists it. */
+  bagIds?: string[]
+  /** Pump sessions: the breast felt full or tense. */
+  full?: boolean
 }
 
 export interface Profile {
@@ -31,6 +37,22 @@ export interface Appointment {
   kind: 'vaccine' | 'visit'
   title: string
   done: boolean
+  notes?: string
+}
+
+/**
+ * A bag of pumped milk in storage. Whether it has been used is not stored here:
+ * it is derived from the feeds that list the bag (see lib/storage.ts), so cancelling or
+ * deleting a feed puts the bag back automatically.
+ */
+export interface MilkBag {
+  id: string
+  /** epoch ms when the milk was pumped */
+  pumpedAt: number
+  volumeMl: number
+  location: 'freezer' | 'fridge'
+  /** epoch ms when it was thrown away (spoiled or degraded) */
+  discardedAt?: number
   notes?: string
 }
 

@@ -9,6 +9,7 @@ import { useEvents, useNow, useStore } from '../lib/hooks'
 import { eventStore } from '../lib/store'
 import {
   appointmentStore,
+  bagStore,
   growthStore,
   isoDate,
   profileStore,
@@ -21,6 +22,7 @@ export default function Settings() {
   const events = useEvents()
   const growth = useStore(growthStore)
   const appointments = useStore(appointmentStore)
+  const bags = useStore(bagStore)
   const now = useNow(60_000)
 
   const fileRef = useRef<HTMLInputElement>(null)
@@ -32,7 +34,7 @@ export default function Settings() {
   const update = (patch: Partial<Profile>) => profileStore.set({ ...profile, ...patch })
 
   const exportData = () => {
-    const backup = buildBackup({ events, profile, growth, appointments }, Date.now())
+    const backup = buildBackup({ events, profile, growth, appointments, bags }, Date.now())
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -62,6 +64,7 @@ export default function Settings() {
     profileStore.set(pending.profile)
     growthStore.set(pending.growth)
     appointmentStore.set(pending.appointments)
+    bagStore.set(pending.bags)
     setPending(null)
   }
 
@@ -73,6 +76,7 @@ export default function Settings() {
     eventStore.replaceAll([])
     growthStore.set([])
     appointmentStore.set([])
+    bagStore.set([])
     profileStore.set({ name: '', birthDate: '' })
     setConfirmClear(false)
   }

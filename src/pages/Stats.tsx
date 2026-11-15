@@ -1,6 +1,8 @@
 import { useState, type ReactElement } from 'react'
 import { format, startOfDay } from 'date-fns'
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -16,8 +18,10 @@ import Chips from '../components/Chips'
 import DayNav from '../components/DayNav'
 import Timeline from '../components/Timeline'
 import { formatDuration } from '../lib/format'
-import { useEvents, useNow } from '../lib/hooks'
+import { useEvents, useNow, useStore } from '../lib/hooks'
 import { dailyTotals, feedGapsByDay, highlights } from '../lib/stats'
+import { stashSummary, storageByDay } from '../lib/storage'
+import { bagStore } from '../lib/stores'
 
 const RANGES = [
   { value: 7, label: '7 days' },
@@ -32,7 +36,8 @@ const TOOLTIP = {
   borderRadius: 12,
   color: 'var(--ink)',
 }
-const MARGIN = { top: 8, right: 4, left: -18, bottom: 0 }
+// Left margin and axis width leave room for 3-digit ml values (a tighter margin clipped them)
+const MARGIN = { top: 8, right: 4, left: -4, bottom: 0 }
 
 const oneDecimal = (n: number) => Math.round(n * 10) / 10
 
@@ -51,6 +56,7 @@ function ChartCard({ title, children }: { title: string; children: ReactElement 
 
 export default function Stats() {
   const events = useEvents()
+  const bags = useStore(bagStore)
   const now = useNow(60_000)
   const [range, setRange] = useState(7)
   const [day, setDay] = useState(() => startOfDay(Date.now()))
@@ -67,6 +73,19 @@ export default function Stats() {
     pump: t.pumpMl,
   }))
   const hasPump = totals.some((t) => t.pumps > 0)
+
+  // Milk storage: the level at the end of each day, and what went in, came out or was thrown away
+  const storage = storageByDay(bags, events, now, range)
+  const stashNow = stashSummary(bags, events, now)
+  const storageData = storage.map((d) => ({
+    label: label(d.day),
+    stash: d.stashMl,
+    stored: d.storedMl,
+    used: d.usedMl,
+    thrown: d.discardedMl,
+  }))
+  const usedMl = storage.reduce((sum, d) => sum + d.usedMl, 0)
+  const thrownMl = storage.reduce((sum, d) => sum + d.discardedMl, 0)
   const gapData = gaps.map((g) => ({
     label: label(g.day),
     gap: g.gapMs === null ? null : oneDecimal(g.gapMs / 3_600_000),
@@ -91,6 +110,16 @@ export default function Stats() {
             label: 'Between pumps',
             value: hl.avgPumpGapMs ? formatDuration(hl.avgPumpGapMs) : '–',
           },
+        ]
+      : []),
+    ...(bags.length > 0
+      ? [
+          {
+            label: 'In storage now',
+            value: `${stashNow.bags} bag${stashNow.bags === 1 ? '' : 's'} · ${stashNow.ml} ml`,
+          },
+          { label: 'Milk used', value: `${usedMl} ml` },
+          ...(thrownMl > 0 ? [{ label: 'Thrown away', value: `${thrownMl} ml` }] : []),
         ]
       : []),
   ]
@@ -120,7 +149,7 @@ export default function Stats() {
               <BarChart data={sleepData} margin={MARGIN}>
                 <CartesianGrid vertical={false} stroke="var(--line)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
-                <YAxis tickLine={false} axisLine={false} tick={TICK} width={40} />
+                <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} />
                 <Tooltip cursor={{ fill: 'var(--surface-2)' }} contentStyle={TOOLTIP} />
                 <Bar dataKey="sleep" name="Sleep (h)" fill="var(--sleep)" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -130,7 +159,7 @@ export default function Stats() {
               <BarChart data={sleepData} margin={MARGIN}>
                 <CartesianGrid vertical={false} stroke="var(--line)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
-                <YAxis tickLine={false} axisLine={false} tick={TICK} width={40} allowDecimals={false} />
+                <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} allowDecimals={false} />
                 <Tooltip cursor={{ fill: 'var(--surface-2)' }} contentStyle={TOOLTIP} />
                 <Bar dataKey="feeds" name="Feeds" fill="var(--eat)" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -141,18 +170,51 @@ export default function Stats() {
                 <BarChart data={sleepData} margin={MARGIN}>
                   <CartesianGrid vertical={false} stroke="var(--line)" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
-                  <YAxis tickLine={false} axisLine={false} tick={TICK} width={40} />
+                  <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} />
                   <Tooltip cursor={{ fill: 'var(--surface-2)' }} contentStyle={TOOLTIP} />
                   <Bar dataKey="pump" name="Pumped (ml)" fill="var(--pump)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ChartCard>
             )}
 
+            {bags.length > 0 && (
+              <>
+                <ChartCard title="Milk in storage (ml)">
+                  <AreaChart data={storageData} margin={MARGIN}>
+                    <CartesianGrid vertical={false} stroke="var(--line)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
+                    <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} />
+                    <Tooltip contentStyle={TOOLTIP} />
+                    <Area
+                      type="monotone"
+                      dataKey="stash"
+                      name="In storage (ml)"
+                      stroke="var(--pump)"
+                      strokeWidth={3}
+                      fill="var(--pump-soft)"
+                    />
+                  </AreaChart>
+                </ChartCard>
+
+                <ChartCard title="Stored vs used per day (ml)">
+                  <BarChart data={storageData} margin={MARGIN}>
+                    <CartesianGrid vertical={false} stroke="var(--line)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
+                    <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} />
+                    <Tooltip cursor={{ fill: 'var(--surface-2)' }} contentStyle={TOOLTIP} />
+                    <Bar dataKey="stored" name="Stored (ml)" fill="var(--pump)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="used" name="Used (ml)" fill="var(--eat)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="thrown" name="Thrown away (ml)" fill="var(--ink-2)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartCard>
+              </>
+            )}
+
             <ChartCard title="Time between feeds (hours)">
               <LineChart data={gapData} margin={MARGIN}>
                 <CartesianGrid vertical={false} stroke="var(--line)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
-                <YAxis tickLine={false} axisLine={false} tick={TICK} width={40} domain={[0, 'auto']} />
+                <YAxis tickLine={false} axisLine={false} tick={TICK} width={44} domain={[0, 'auto']} />
                 <Tooltip contentStyle={TOOLTIP} />
                 <Line
                   type="monotone"

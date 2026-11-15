@@ -1,4 +1,4 @@
-import type { Appointment, BabyEvent, Measurement, Profile } from '../types'
+import type { Appointment, BabyEvent, Measurement, MilkBag, Profile } from '../types'
 
 export interface Backup {
   app: 'easykid'
@@ -8,6 +8,8 @@ export interface Backup {
   profile: Profile
   growth: Measurement[]
   appointments: Appointment[]
+  /** bags of stored milk; backups made before storage existed have none */
+  bags: MilkBag[]
 }
 
 const EVENT_TYPES = ['eat', 'activity', 'sleep', 'you', 'diaper', 'pump']
@@ -34,6 +36,13 @@ const isAppointment = (v: unknown): v is Appointment =>
   typeof v.title === 'string' &&
   (v.kind === 'vaccine' || v.kind === 'visit') &&
   typeof v.done === 'boolean'
+
+const isBag = (v: unknown): v is MilkBag =>
+  isObj(v) &&
+  typeof v.id === 'string' &&
+  typeof v.pumpedAt === 'number' &&
+  typeof v.volumeMl === 'number' &&
+  (v.location === 'freezer' || v.location === 'fridge')
 
 export function buildBackup(
   data: Omit<Backup, 'app' | 'version' | 'exportedAt'>,
@@ -68,6 +77,7 @@ export function parseBackup(
     !raw.events.every(isEvent) ||
     !raw.growth.every(isMeasurement) ||
     !raw.appointments.every(isAppointment) ||
+    (raw.bags !== undefined && (!Array.isArray(raw.bags) || !raw.bags.every(isBag))) ||
     typeof raw.profile.name !== 'string' ||
     typeof raw.profile.birthDate !== 'string'
   ) {
@@ -84,6 +94,7 @@ export function parseBackup(
       profile: { name: raw.profile.name, birthDate: raw.profile.birthDate },
       growth: raw.growth,
       appointments: raw.appointments,
+      bags: Array.isArray(raw.bags) ? raw.bags : [],
     },
   }
 }

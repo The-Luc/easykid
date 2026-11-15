@@ -1,4 +1,4 @@
-export type Table = 'babies' | 'events' | 'measurements' | 'appointments'
+export type Table = 'babies' | 'events' | 'measurements' | 'appointments' | 'milk_bags'
 
 export interface OutboxEntry {
   op: 'upsert' | 'delete'

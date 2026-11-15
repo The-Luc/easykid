@@ -8,6 +8,7 @@ import TabBar from './components/TabBar'
 import Today from './pages/Today'
 import History from './pages/History'
 import Settings from './pages/Settings'
+import Storage from './pages/Storage'
 
 // The chart pages pull in the charting library, so load them on demand
 const Stats = lazy(() => import('./pages/Stats'))
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/stats" element={<Stats />} />
             <Route path="/growth" element={<Growth />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/storage" element={<Storage />} />
           </Routes>
         </Suspense>
       </main>

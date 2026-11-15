@@ -16,6 +16,12 @@ function summary(e: BabyEvent, now: number): string {
   if (e.type === 'diaper' && e.details.diaper) parts.push(DIAPER[e.details.diaper])
   if (e.details.side) parts.push(SIDE[e.details.side])
   if (e.details.ml) parts.push(`${e.details.ml} ml`)
+  if (e.details.milk === 'formula') parts.push('Formula')
+  if (e.details.milk === 'pumped') {
+    const n = e.details.bagIds?.length ?? 0
+    parts.push(n > 0 ? `Pumped milk (${n} bag${n === 1 ? '' : 's'})` : 'Pumped milk')
+  }
+  if (e.details.full) parts.push('Felt full')
   const end = e.endedAt ?? now
   if (e.type !== 'diaper' && end - e.startedAt >= 60_000) {
     parts.push(formatDuration(end - e.startedAt) + (e.endedAt === null ? ' so far' : ''))

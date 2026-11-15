@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import PageHead from '../components/PageHead'
 import Chips from '../components/Chips'
 import DayStats from '../components/DayStats'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
+import MilkSection from '../components/MilkSection'
 import SyncPill from '../components/SyncPill'
 import { awakeSince, withDerived } from '../lib/awake'
 import { daySummary, eventsOnDay, getOpenPhase } from '../lib/events'
@@ -12,9 +14,10 @@ import { formatClock, formatDuration, formatTime } from '../lib/format'
 import { useEvents, useNow, useStore } from '../lib/hooks'
 import { PHASE_META } from '../lib/meta'
 import { predictNextFeed } from '../lib/predict'
+import { availableBags, expiry, stashSummary, storedBags, volumeOf } from '../lib/storage'
 import { eventStore } from '../lib/store'
 import { ageInWeeks, ageLabel } from '../lib/age'
-import { profileStore } from '../lib/stores'
+import { bagStore, profileStore } from '../lib/stores'
 import type { BabyEvent, EventDetails, EventType } from '../types'
 
 const SIDES = [
@@ -65,6 +68,11 @@ export default function Today() {
     }
   }
   const profile = useStore(profileStore)
+  const bags = useStore(bagStore)
+  const stash = stashSummary(bags, events, now)
+  const stored = storedBags(bags, events)
+  const expiredBags = stored.filter((b) => expiry(b, now).state === 'expired').length
+  const soonBags = stored.filter((b) => expiry(b, now).state === 'soon').length
   const age = ageLabel(profile.birthDate, now)
   const prediction = predictNextFeed(events, now, ageInWeeks(profile.birthDate, now))
 
@@ -76,7 +84,7 @@ export default function Today() {
     setDetails(
       side === 'bottle'
         ? { side, ml: open?.details.ml ?? 90 }
-        : { side, ml: undefined },
+        : { side, ml: undefined, milk: undefined, bagIds: undefined },
     )
 
   const logDiaper = (kind: 'wet' | 'dirty' | 'both') => {
@@ -123,11 +131,32 @@ export default function Today() {
                   clearable
                 />
                 {open.details.side === 'bottle' && (
-                  <Chips
-                    options={ML}
-                    value={open.details.ml}
-                    onChange={(ml) => setDetails({ ml })}
-                  />
+                  <>
+                    <Chips
+                      options={ML}
+                      value={open.details.ml}
+                      onChange={(ml) => setDetails({ ml })}
+                    />
+                    <MilkSection
+                      milk={open.details.milk}
+                      bagIds={open.details.bagIds ?? []}
+                      bags={availableBags(bags, events, open.id)}
+                      now={now}
+                      onMilk={(milk) =>
+                        setDetails(milk === 'pumped' ? { milk } : { milk, bagIds: undefined })
+                      }
+                      onBags={(ids) =>
+                        setDetails(
+                          ids.length > 0
+                            ? {
+                                bagIds: ids,
+                                ml: volumeOf(availableBags(bags, events, open.id), ids),
+                              }
+                            : { bagIds: undefined },
+                        )
+                      }
+                    />
+                  </>
                 )}
               </div>
             )}
@@ -263,6 +292,24 @@ export default function Today() {
             </button>
           </div>
         </section>
+
+        {/* Milk storage */}
+        {bags.length > 0 && (
+          <Link to="/storage" className="card stash-card">
+            <h2>🧊 Milk stash</h2>
+            <p className="stash-main">
+              {stash.bags} bag{stash.bags === 1 ? '' : 's'} · {stash.ml} ml
+            </p>
+            <p className="muted small">
+              {stash.freezer.bags} freezer · {stash.fridge.bags} fridge
+              {expiredBags > 0
+                ? ` · ⚠ ${expiredBags} past use-by`
+                : soonBags > 0
+                  ? ` · ${soonBags} to use soon`
+                  : ''}
+            </p>
+          </Link>
+        )}
 
         {/* Next likely feed */}
         <section className="card next">

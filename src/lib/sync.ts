@@ -1,16 +1,19 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
-import type { Appointment, BabyEvent, Measurement } from '../types'
+import type { Appointment, BabyEvent, Measurement, MilkBag } from '../types'
 import {
   appointmentToRow,
+  bagToRow,
   eventToRow,
   measurementToRow,
   profileToRow,
   rowToAppointment,
+  rowToBag,
   rowToEvent,
   rowToMeasurement,
   rowToProfile,
   type AppointmentRow,
   type BabyRow,
+  type BagRow,
   type EventRow,
   type MeasurementRow,
 } from './cloudMap'
@@ -30,7 +33,7 @@ import {
 } from './outbox'
 import { createPersisted } from './persist'
 import { eventStore } from './store'
-import { appointmentStore, growthStore, profileStore } from './stores'
+import { appointmentStore, bagStore, growthStore, profileStore } from './stores'
 import { supabase } from './supabase'
 
 /*
@@ -132,6 +135,7 @@ function trackLocal(babyId: string, queueFlush: () => void): () => void {
   let prevGrowth = growthStore.getSnapshot()
   let prevAppts = appointmentStore.getSnapshot()
   let prevProfile = profileStore.getSnapshot()
+  let prevBags = bagStore.getSnapshot()
 
   const handle = <T extends { id: string }>(table: Table, prev: T[], next: T[]) => {
     if (applying > 0) return
@@ -163,6 +167,11 @@ function trackLocal(babyId: string, queueFlush: () => void): () => void {
       handle('appointments', prevAppts, next)
       prevAppts = next
     }),
+    bagStore.subscribe(() => {
+      const next = bagStore.getSnapshot()
+      handle('milk_bags', prevBags, next)
+      prevBags = next
+    }),
     profileStore.subscribe(() => {
       const next = profileStore.getSnapshot()
       if (applying === 0 && !sameRecord(prevProfile, next)) {
@@ -185,12 +194,15 @@ function seedAll(babyId: string, includeProfile: boolean) {
     if (growth.changed) growthStore.set(growth.list)
     const appts = ensureUuids(appointmentStore.getSnapshot())
     if (appts.changed) appointmentStore.set(appts.list)
+    const bags = ensureUuids(bagStore.getSnapshot())
+    if (bags.changed) bagStore.set(bags.list)
   })
 
   const items = [
     ...eventStore.getSnapshot().map((x) => ({ table: 'events' as const, id: x.id, op: 'upsert' as const })),
     ...growthStore.getSnapshot().map((x) => ({ table: 'measurements' as const, id: x.id, op: 'upsert' as const })),
     ...appointmentStore.getSnapshot().map((x) => ({ table: 'appointments' as const, id: x.id, op: 'upsert' as const })),
+    ...bagStore.getSnapshot().map((x) => ({ table: 'milk_bags' as const, id: x.id, op: 'upsert' as const })),
     ...(includeProfile ? [{ table: 'babies' as const, id: babyId, op: 'upsert' as const }] : []),
   ]
   updateMeta((m) => ({ ...m, outbox: markMany(m.outbox, items) }))
@@ -291,6 +303,7 @@ async function flush() {
     await pushTable<BabyEvent>(sb, 'events', ctx.babyId, eventStore.getSnapshot(), eventToRow, entries, sent)
     await pushTable<Measurement>(sb, 'measurements', ctx.babyId, growthStore.getSnapshot(), measurementToRow, entries, sent)
     await pushTable<Appointment>(sb, 'appointments', ctx.babyId, appointmentStore.getSnapshot(), appointmentToRow, entries, sent)
+    await pushTable<MilkBag>(sb, 'milk_bags', ctx.babyId, bagStore.getSnapshot(), bagToRow, entries, sent)
 
     updateMeta((m) => ({ ...m, outbox: clearSent(m.outbox, sent) }))
     if (dropped > 0) {
@@ -378,6 +391,16 @@ function applyAppointments(rows: AppointmentRow[]) {
   if (changed) applyRemote(() => appointmentStore.set(list))
 }
 
+function applyBags(rows: BagRow[]) {
+  const pending = pendingKeys()
+  const { list, changed } = mergeRemote(
+    bagStore.getSnapshot(),
+    rows.map((r) => ({ id: r.id, deleted: Boolean(r.deleted_at), value: r.deleted_at ? undefined : rowToBag(r) })),
+    (id) => keyOf('milk_bags', id) in pending,
+  )
+  if (changed) applyRemote(() => bagStore.set(list))
+}
+
 function applyBaby(row: BabyRow) {
   if (keyOf('babies', row.id) in pendingKeys()) return
   const next = rowToProfile(row)
@@ -395,6 +418,7 @@ async function pull() {
     applyEvents(await pullRows<EventRow>(sb, 'events', ctx.babyId))
     applyMeasurements(await pullRows<MeasurementRow>(sb, 'measurements', ctx.babyId))
     applyAppointments(await pullRows<AppointmentRow>(sb, 'appointments', ctx.babyId))
+    applyBags(await pullRows<BagRow>(sb, 'milk_bags', ctx.babyId))
     if (pendingCount(syncMeta.getSnapshot().outbox) === 0 && syncStatus.getSnapshot().state !== 'error') {
       setStatus('idle')
     }
@@ -423,6 +447,7 @@ function openRealtime(sb: SupabaseClient, babyId: string): RealtimeChannel {
   listen('events', `baby_id=eq.${babyId}`, (r) => applyEvents([r as unknown as EventRow]))
   listen('measurements', `baby_id=eq.${babyId}`, (r) => applyMeasurements([r as unknown as MeasurementRow]))
   listen('appointments', `baby_id=eq.${babyId}`, (r) => applyAppointments([r as unknown as AppointmentRow]))
+  listen('milk_bags', `baby_id=eq.${babyId}`, (r) => applyBags([r as unknown as BagRow]))
   listen('babies', `id=eq.${babyId}`, (r) => applyBaby(r as unknown as BabyRow))
 
   // (Re)connected: catch up on anything missed while the socket was down
