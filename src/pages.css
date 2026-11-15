@@ -350,3 +350,17 @@
   color: #fff;
   border: 2px solid rgba(255, 255, 255, 0.55);
 }
+
+/* ---------- The calculated start/end line in the add/edit sheet ---------- */
+.calc-line {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: center;
+}
+
+.calc-line strong {
+  color: var(--ink);
+}

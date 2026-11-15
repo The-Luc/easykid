@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import { format, isSameDay } from 'date-fns'
 import Chips from './Chips'
 import Sheet from './Sheet'
 import TimeField from './TimeField'
 import WheelField from './WheelField'
 import { isPhase } from '../lib/events'
-import { formatDuration } from '../lib/format'
+import { formatDuration, formatTime } from '../lib/format'
 import { EVENT_EMOJI, EVENT_LABEL } from '../lib/meta'
 import { eventStore } from '../lib/store'
+import { clampDuration, resolveSpan, switchAnchor, type Anchor } from '../lib/times'
 import type { BabyEvent, EventDetails, EventType } from '../types'
 
 type Side = NonNullable<EventDetails['side']>
@@ -27,6 +29,11 @@ const DIAPERS: { value: Diaper; label: string }[] = [
   { value: 'wet', label: '💧 Wet' },
   { value: 'dirty', label: '💩 Dirty' },
   { value: 'both', label: 'Both' },
+]
+
+const ANCHORS: { value: Anchor; label: string }[] = [
+  { value: 'start', label: 'Started' },
+  { value: 'end', label: 'Ended' },
 ]
 
 const DEFAULT_DURATION: Record<EventType, number> = {
@@ -58,9 +65,14 @@ export default function EventSheet({
   const running = event !== undefined && event.endedAt === null && isPhase(event.type)
 
   const [type, setType] = useState<EventType>(event?.type ?? initialType ?? 'eat')
-  const [timeAt, setTimeAt] = useState(() =>
-    event ? (event.endedAt ?? event.startedAt) : (defaultEnd ?? Date.now()),
+  // You set ONE time (the anchor: the start or the end) plus the duration, and the
+  // other time is calculated. An existing entry opens on its start, which matches
+  // the timer and the list; a new past entry opens on its end ("it just finished").
+  const [anchor, setAnchor] = useState<Anchor>(event ? 'start' : 'end')
+  const [anchorAt, setAnchorAt] = useState(() =>
+    event ? event.startedAt : (defaultEnd ?? Date.now()),
   )
+  const [capped, setCapped] = useState(false)
   const [duration, setDuration] = useState(() =>
     event && event.endedAt !== null
       ? Math.max(1, Math.round((event.endedAt - event.startedAt) / 60_000))
@@ -77,12 +89,51 @@ export default function EventSheet({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const hasDuration = type !== 'diaper' && !running
-  const timeLabel = running ? 'Started' : type === 'diaper' ? 'Time' : 'Ended'
+  const timeLabel = running
+    ? 'Started'
+    : type === 'diaper'
+      ? 'Time'
+      : anchor === 'start'
+        ? 'Started'
+        : 'Ended'
+
+  const durationMs = hasDuration ? duration * 60_000 : 0
+  const span = resolveSpan(anchor, anchorAt, durationMs)
 
   const changeType = (t: EventType) => {
     setType(t)
     setDuration(DEFAULT_DURATION[t])
+    setCapped(false)
   }
+
+  // Changing the duration only ever moves the calculated time. When the start is the
+  // anchor the entry may not end in the future, so the duration is capped.
+  const changeDuration = (minutes: number) => {
+    const next = clampDuration(anchor, anchorAt, minutes, Date.now())
+    setCapped(next < Math.round(minutes))
+    setDuration(next)
+  }
+
+  const changeAnchorAt = (ms: number) => {
+    setAnchorAt(ms)
+    const next = clampDuration(anchor, ms, duration, Date.now())
+    setCapped(next < duration)
+    setDuration(next)
+  }
+
+  // Switch which end you set; the entry itself stays exactly the same
+  const changeAnchor = (next: Anchor) => {
+    if (next === anchor) return
+    setAnchorAt(switchAnchor(anchor, anchorAt, durationMs))
+    setAnchor(next)
+    setCapped(false)
+  }
+
+  const otherLabel = anchor === 'start' ? 'Ends' : 'Started'
+  const otherAt = anchor === 'start' ? span.endedAt : span.startedAt
+  const otherText = isSameDay(otherAt, anchorAt)
+    ? formatTime(otherAt)
+    : `${format(otherAt, 'EEE')} ${formatTime(otherAt)}`
 
   const save = () => {
     const details: EventDetails = {}
@@ -94,13 +145,12 @@ export default function EventSheet({
     const note = notes.trim() || undefined
 
     if (event && running) {
-      eventStore.update(event.id, { startedAt: timeAt, details, notes: note })
+      eventStore.update(event.id, { startedAt: anchorAt, details, notes: note })
     } else {
-      const durMs = hasDuration ? duration * 60_000 : 0
       const payload = {
         type,
-        startedAt: timeAt - durMs,
-        endedAt: timeAt,
+        startedAt: span.startedAt,
+        endedAt: span.endedAt,
         details,
         notes: note,
       }
@@ -163,11 +213,29 @@ export default function EventSheet({
               step={type === 'eat' ? 1 : 5}
               unit="min"
               hint={duration >= 60 ? `= ${formatDuration(duration * 60_000)}` : undefined}
-              onChange={setDuration}
+              onChange={changeDuration}
             />
           )}
 
-          <TimeField label={timeLabel} value={timeAt} onChange={setTimeAt} />
+          {hasDuration && (
+            <div className="field">
+              <span className="field-label">Which time do you know?</span>
+              <Chips
+                options={ANCHORS}
+                value={anchor}
+                onChange={(a) => a && changeAnchor(a)}
+              />
+            </div>
+          )}
+
+          <TimeField label={timeLabel} value={anchorAt} onChange={changeAnchorAt} />
+
+          {hasDuration && (
+            <p className="calc-line">
+              {otherLabel} <strong>{otherText}</strong> · calculated from the duration
+              {capped && ' · capped so it does not end in the future'}
+            </p>
+          )}
 
           {showNote ? (
             <input
