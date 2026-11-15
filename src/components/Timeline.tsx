@@ -58,6 +58,9 @@ export default function Timeline({
           <i className="auto" /> Auto
         </span>
         <span>
+          <i className="pump" /> Pump
+        </span>
+        <span>
           <i className="sleep" /> Sleep
         </span>
         <span>

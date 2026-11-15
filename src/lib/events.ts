@@ -1,8 +1,16 @@
 import { isSameDay } from 'date-fns'
 import type { BabyEvent, EventType, PhaseType } from '../types'
 
+/** Phases are the things that have a running timer (eat, sleep, activity). */
 export function isPhase(type: EventType): type is PhaseType {
-  return type !== 'diaper'
+  return type !== 'diaper' && type !== 'pump'
+}
+
+/** Amount (ml) of the most recent pump session that recorded one; used as the next default. */
+export function lastPumpMl(events: BabyEvent[]): number | undefined {
+  return events
+    .filter((e) => e.type === 'pump' && e.details.ml)
+    .sort((a, b) => b.startedAt - a.startedAt)[0]?.details.ml
 }
 
 /** The phase (eat / activity / sleep) that is currently running, if any. */
@@ -67,6 +75,9 @@ export interface DaySummary {
   diapers: number
   /** Total sleep. This is also the parent's free "You" time. */
   sleepMs: number
+  /** Breast-pump sessions and the total amount pumped (ml) */
+  pumps: number
+  pumpMl: number
 }
 
 export function daySummary(
@@ -81,5 +92,9 @@ export function daySummary(
     sleepMs: list
       .filter((e) => e.type === 'sleep')
       .reduce((sum, e) => sum + ((e.endedAt ?? now) - e.startedAt), 0),
+    pumps: list.filter((e) => e.type === 'pump').length,
+    pumpMl: list
+      .filter((e) => e.type === 'pump')
+      .reduce((sum, e) => sum + (e.details.ml ?? 0), 0),
   }
 }

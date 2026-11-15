@@ -32,7 +32,7 @@ create table if not exists public.baby_members (
 create table if not exists public.events (
   id          uuid primary key,
   baby_id     uuid not null references public.babies (id) on delete cascade,
-  type        text not null check (type in ('eat', 'activity', 'sleep', 'you', 'diaper')),
+  type        text not null check (type in ('eat', 'activity', 'sleep', 'you', 'diaper', 'pump')),
   started_at  timestamptz not null,
   ended_at    timestamptz,
   details     jsonb not null default '{}'::jsonb,
@@ -306,3 +306,15 @@ begin
   end loop;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Migration 1: allow breast pump entries (type = 'pump').
+-- A project created from an older copy of this file has the old list of types,
+-- and `create table if not exists` does not change it, so replace the check.
+-- Safe to re-run. Run this BEFORE deploying an app version that can log pumps.
+-- ---------------------------------------------------------------------------
+
+alter table public.events drop constraint if exists events_type_check;
+alter table public.events
+  add constraint events_type_check
+  check (type in ('eat', 'activity', 'sleep', 'you', 'diaper', 'pump'));

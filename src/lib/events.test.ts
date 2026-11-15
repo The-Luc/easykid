@@ -5,6 +5,7 @@ import {
   daySummary,
   eventsOnDay,
   getOpenPhase,
+  lastPumpMl,
   startPhase,
   stopPhase,
 } from './events'
@@ -118,6 +119,41 @@ describe('daySummary', () => {
       feeds: 2,
       diapers: 1,
       sleepMs: 90 * MIN,
+      pumps: 0,
+      pumpMl: 0,
     })
+  })
+})
+
+describe('pump entries', () => {
+  const pump = (id: string, start: number, ml?: number): BabyEvent => ({
+    id,
+    type: 'pump',
+    startedAt: start,
+    endedAt: start + 20 * MIN,
+    details: ml ? { side: 'both', ml } : { side: 'both' },
+  })
+
+  it('is not a phase, so it never counts as a running timer', () => {
+    expect(getOpenPhase([mk('p', 'pump', T, null)])).toBeUndefined()
+  })
+
+  it('does not interfere with the eat and sleep timers', () => {
+    const running = startPhase([pump('p', T - 30 * MIN, 100)], 'sleep', T, 'a')
+    expect(running.map((e) => e.id)).toEqual(['p', 'a'])
+    expect(stopPhase(running, T + MIN).find((e) => e.id === 'p')?.endedAt).toBe(T - 10 * MIN)
+  })
+
+  it('adds the sessions and amount pumped to the day summary', () => {
+    const events = [pump('a', T - 120 * MIN, 90), pump('b', T, 120), pump('c', T + 60 * MIN)]
+    const s = daySummary(events, T, T + 3 * 60 * MIN)
+    expect(s.pumps).toBe(3)
+    expect(s.pumpMl).toBe(210) // a session without an amount adds nothing
+  })
+
+  it('finds the amount of the most recent session that recorded one', () => {
+    const events = [pump('old', T - 300 * MIN, 80), pump('new', T, 130), pump('none', T + 60 * MIN)]
+    expect(lastPumpMl(events)).toBe(130)
+    expect(lastPumpMl([])).toBeUndefined()
   })
 })

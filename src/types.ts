@@ -1,5 +1,6 @@
 export type PhaseType = 'eat' | 'activity' | 'sleep' | 'you'
-export type EventType = PhaseType | 'diaper'
+/** `pump` is a logged breast-pump session. It is not a phase: it has no timer. */
+export type EventType = PhaseType | 'diaper' | 'pump'
 
 export interface EventDetails {
   /** How the feed happened. `ml` is only meaningful for `bottle`. */

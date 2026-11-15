@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BabyEvent } from '../types'
-import { dailyTotals, feedGapsByDay, highlights, timeline } from './stats'
+import { dailyTotals, feedGapsByDay, highlights, pumpGapMs, timeline } from './stats'
 
 const HOUR = 3_600_000
 const at = (iso: string) => new Date(iso).getTime()
@@ -111,5 +111,65 @@ describe('timeline', () => {
     const { segments } = timeline(events, day, at('2026-11-15T20:00:00'))
     expect(segments[0].from).toBe(0)
     expect(segments[0].to).toBeCloseTo(0.25)
+  })
+})
+
+describe('breast pump', () => {
+  const pump = (id: string, start: string, end: string, ml?: number): BabyEvent =>
+    ev(id, 'pump', start, end, ml ? { side: 'both', ml } : { side: 'both' })
+
+  it('counts sessions, amount and time in the daily totals, apart from bottle feeding', () => {
+    const now = at('2026-11-14T20:00:00')
+    const events = [
+      pump('p1', '2026-11-14T07:00:00', '2026-11-14T07:20:00', 100),
+      pump('p2', '2026-11-14T13:00:00', '2026-11-14T13:30:00', 140),
+      ev('b', 'eat', '2026-11-14T09:00:00', '2026-11-14T09:15:00', { side: 'bottle', ml: 90 }),
+    ]
+    const [today] = dailyTotals(events, now, 1)
+    expect(today).toMatchObject({ pumps: 2, pumpMl: 240, pumpMs: 50 * 60_000, ml: 90, feeds: 1 })
+  })
+
+  it('averages the gap between sessions and ignores very short or very long gaps', () => {
+    const since = at('2026-11-14T00:00:00')
+    const events = [
+      pump('a', '2026-11-14T06:00:00', '2026-11-14T06:20:00'),
+      pump('b', '2026-11-14T06:10:00', '2026-11-14T06:30:00'), // 10 min after a: ignored
+      pump('c', '2026-11-14T09:10:00', '2026-11-14T09:30:00'), // 3h after b
+      pump('d', '2026-11-14T12:10:00', '2026-11-14T12:30:00'), // 3h after c
+    ]
+    expect(pumpGapMs(events, since)).toBe(3 * HOUR)
+    expect(pumpGapMs([], since)).toBeNull()
+  })
+
+  it('summarises pumping in the highlights, leaving out today while other days exist', () => {
+    const now = at('2026-11-14T12:00:00')
+    const events = [
+      pump('y1', '2026-11-13T07:00:00', '2026-11-13T07:20:00', 100),
+      pump('y2', '2026-11-13T13:00:00', '2026-11-13T13:40:00', 140),
+      pump('t1', '2026-11-14T07:00:00', '2026-11-14T07:20:00', 999), // today: not counted yet
+    ]
+    const h = highlights(events, now, 7)
+    expect(h.daysCounted).toBe(1)
+    expect(h.avgPumps).toBe(2)
+    expect(h.avgPumpMl).toBe(240)
+    expect(h.avgPumpSessionMl).toBe(120)
+    expect(h.avgPumpMs).toBe(30 * 60_000)
+  })
+
+  it('treats a day with only a pump as a day with data', () => {
+    const now = at('2026-11-14T12:00:00')
+    const h = highlights([pump('p', '2026-11-13T07:00:00', '2026-11-13T07:20:00', 80)], now, 7)
+    expect(h.daysCounted).toBe(1)
+  })
+
+  it('draws a pump on the timeline like any other timed entry', () => {
+    const day = at('2026-11-14T00:00:00')
+    const { segments } = timeline(
+      [pump('p', '2026-11-14T06:00:00', '2026-11-14T06:30:00', 90)],
+      day,
+      at('2026-11-14T20:00:00'),
+    )
+    expect(segments).toHaveLength(1)
+    expect(segments[0].type).toBe('pump')
   })
 })

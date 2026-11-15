@@ -364,3 +364,84 @@
 .calc-line strong {
   color: var(--ink);
 }
+
+/* ---------- Breast pump ---------- */
+:root {
+  --pump: #e879a8;
+  --pump-soft: #fde7f1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pump-soft: #3a2330;
+  }
+}
+
+/* Two columns: Eat + Sleep (big) on the left, Activity + You + Pump on the right */
+.phase-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.phase-col {
+  display: grid;
+  gap: 12px;
+}
+
+.phase-col.main {
+  grid-template-rows: 1fr 1fr;
+}
+
+.phase-col.side {
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.phase-col.side .phase {
+  min-height: 84px;
+  padding: 12px 14px;
+  gap: 2px;
+}
+
+.phase-col.side .letter {
+  font-size: 26px;
+}
+
+.phase-col.main .phase {
+  min-height: 128px;
+}
+
+.phase.pump {
+  background: var(--pump-soft);
+}
+
+.phase.pump .letter {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.event.pump .event-icon {
+  background: var(--pump-soft);
+}
+
+.stats-row.four {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stats-row.four .stat-num {
+  font-size: 18px;
+}
+
+/* pumping often overlaps sleep, so it is a thin bar in a lower lane */
+.tl-seg.pump {
+  top: auto;
+  bottom: 3px;
+  height: 6px;
+  background: var(--pump);
+  border-radius: 3px;
+}
+
+.tl-legend i.pump {
+  background: var(--pump);
+}

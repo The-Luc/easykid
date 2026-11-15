@@ -59,11 +59,14 @@ export default function Stats() {
   const gaps = feedGapsByDay(events, now, range)
   const label = (d: number) => format(d, range === 7 ? 'EEE' : 'd')
 
-  const sleepData = dailyTotals(events, now, range).map((t) => ({
+  const totals = dailyTotals(events, now, range)
+  const sleepData = totals.map((t) => ({
     label: label(t.day),
     sleep: oneDecimal(t.sleepMs / 3_600_000),
     feeds: t.feeds,
+    pump: t.pumpMl,
   }))
+  const hasPump = totals.some((t) => t.pumps > 0)
   const gapData = gaps.map((g) => ({
     label: label(g.day),
     gap: g.gapMs === null ? null : oneDecimal(g.gapMs / 3_600_000),
@@ -75,6 +78,21 @@ export default function Stats() {
     { label: 'Sleep / day', value: formatDuration(hl.avgSleepMs) },
     { label: 'Longest sleep', value: formatDuration(hl.longestSleepMs) },
     ...(hl.avgMl > 0 ? [{ label: 'Bottle / day', value: `${Math.round(hl.avgMl)} ml` }] : []),
+    ...(hl.avgPumps > 0
+      ? [
+          { label: 'Pumps / day', value: hl.avgPumps.toFixed(1) },
+          { label: 'Pumped / day', value: `${Math.round(hl.avgPumpMl)} ml` },
+          {
+            label: 'Per session',
+            value: hl.avgPumpSessionMl ? `${Math.round(hl.avgPumpSessionMl)} ml` : '–',
+          },
+          { label: 'Pump time', value: hl.avgPumpMs ? formatDuration(hl.avgPumpMs) : '–' },
+          {
+            label: 'Between pumps',
+            value: hl.avgPumpGapMs ? formatDuration(hl.avgPumpGapMs) : '–',
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -117,6 +135,18 @@ export default function Stats() {
                 <Bar dataKey="feeds" name="Feeds" fill="var(--eat)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ChartCard>
+
+            {hasPump && (
+              <ChartCard title="Pumped per day (ml)">
+                <BarChart data={sleepData} margin={MARGIN}>
+                  <CartesianGrid vertical={false} stroke="var(--line)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" />
+                  <YAxis tickLine={false} axisLine={false} tick={TICK} width={40} />
+                  <Tooltip cursor={{ fill: 'var(--surface-2)' }} contentStyle={TOOLTIP} />
+                  <Bar dataKey="pump" name="Pumped (ml)" fill="var(--pump)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+            )}
 
             <ChartCard title="Time between feeds (hours)">
               <LineChart data={gapData} margin={MARGIN}>

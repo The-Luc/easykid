@@ -35,3 +35,18 @@ describe('parseBackup', () => {
     expect(parseBackup(JSON.stringify(bad))).toMatchObject({ ok: false })
   })
 })
+
+describe('breast pump entries', () => {
+  it('are accepted by a backup', () => {
+    const withPump = buildBackup(
+      {
+        ...sample,
+        events: [
+          { id: 'p', type: 'pump', startedAt: 1, endedAt: 2, details: { side: 'both', ml: 120 } },
+        ],
+      },
+      1000,
+    )
+    expect(parseBackup(JSON.stringify(withPump)).ok).toBe(true)
+  })
+})

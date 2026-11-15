@@ -11,7 +11,7 @@ import { awakeSince, withDerived } from '../lib/awake'
 import { daySummary, eventsOnDay, getOpenPhase } from '../lib/events'
 import { formatClock, formatDuration, formatTime } from '../lib/format'
 import { useEvents, useNow, useStore } from '../lib/hooks'
-import { PHASES, PHASE_META } from '../lib/meta'
+import { PHASE_META } from '../lib/meta'
 import { predictNextFeed } from '../lib/predict'
 import { eventStore } from '../lib/store'
 import { ageInWeeks, ageLabel } from '../lib/age'
@@ -172,14 +172,36 @@ export default function Today() {
         )}
 
         {/* E.A.S.Y. tiles */}
-        <div className="phases">
-          {PHASES.map((p) => {
-            const meta = PHASE_META[p]
+        {/* Left: the two things you time. Right: Activity and You (calculated) and Pump. */}
+        <div className="phase-columns">
+          <div className="phase-col main">
+            {(['eat', 'sleep'] as const).map((p) => {
+              const meta = PHASE_META[p]
+              const active = open?.type === p
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  className={`phase ${p}${active ? ' active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() =>
+                    active ? eventStore.stopPhase() : eventStore.startPhase(p)
+                  }
+                >
+                  <span className="letter">{meta.letter}</span>
+                  <span className="name">{meta.name}</span>
+                  <span className="hint">{active ? 'Tap to stop' : meta.hint}</span>
+                </button>
+              )
+            })}
+          </div>
 
-            // A and Y are calculated from your eat and sleep times, so they are
-            // shown a bit gray with an AUTO badge. Tapping one still lets you
-            // add that record by hand (a timer would clash with a running sleep).
-            if (p === 'activity' || p === 'you') {
+          <div className="phase-col side">
+            {/* A and Y are calculated from your eat and sleep times, so they are shown a
+                bit gray with an AUTO badge. Tapping one still lets you add that record by
+                hand (a timer would clash with a running sleep). */}
+            {(['activity', 'you'] as const).map((p) => {
+              const meta = PHASE_META[p]
               const isActivity = p === 'activity'
               const live = isActivity ? awake !== undefined : open?.type === 'sleep'
               const hint = isActivity
@@ -205,25 +227,26 @@ export default function Today() {
                   <span className="hint">{hint}</span>
                 </button>
               )
-            }
+            })}
 
-            const active = open?.type === p
-            return (
-              <button
-                key={p}
-                type="button"
-                className={`phase ${p}${active ? ' active' : ''}`}
-                aria-pressed={active}
-                onClick={() =>
-                  active ? eventStore.stopPhase() : eventStore.startPhase(p)
-                }
-              >
-                <span className="letter">{meta.letter}</span>
-                <span className="name">{meta.name}</span>
-                <span className="hint">{active ? 'Tap to stop' : meta.hint}</span>
-              </button>
-            )
-          })}
+            {/* Breast pump: logged by hand (no timer), so it opens the Add sheet */}
+            <button
+              type="button"
+              className="phase pump"
+              aria-label="Log a breast pump session"
+              onClick={() => setSheet({ type: 'pump' })}
+            >
+              <span className="letter">🥛</span>
+              <span className="name">Pump</span>
+              <span className="hint">
+                {summary.pumpMl > 0
+                  ? `${summary.pumpMl} ml today`
+                  : summary.pumps > 0
+                    ? `${summary.pumps} today`
+                    : 'Tap to log'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Quick diaper */}

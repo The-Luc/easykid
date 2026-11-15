@@ -2,6 +2,7 @@ import { addDays, startOfDay } from 'date-fns'
 import type { BabyEvent, EventType } from '../types'
 
 const HOUR = 3_600_000
+const MIN = 60_000
 
 export function overlapMs(start: number, end: number, from: number, to: number) {
   return Math.max(0, Math.min(end, to) - Math.max(start, from))
@@ -21,13 +22,26 @@ export interface DayTotals {
   feeds: number
   ml: number
   diapers: number
+  /** breast-pump sessions, total amount (ml) and total time */
+  pumps: number
+  pumpMl: number
+  pumpMs: number
 }
 
 /** Per-day totals. Sleep is split across midnight, so overnight sleep counts on both days. */
 export function dailyTotals(events: BabyEvent[], now: number, days: number): DayTotals[] {
   return dayStarts(now, days).map((day) => {
     const end = addDays(day, 1).getTime()
-    const t: DayTotals = { day, sleepMs: 0, feeds: 0, ml: 0, diapers: 0 }
+    const t: DayTotals = {
+      day,
+      sleepMs: 0,
+      feeds: 0,
+      ml: 0,
+      diapers: 0,
+      pumps: 0,
+      pumpMl: 0,
+      pumpMs: 0,
+    }
     for (const e of events) {
       if (e.type === 'sleep') {
         t.sleepMs += overlapMs(e.startedAt, e.endedAt ?? now, day, end)
@@ -37,6 +51,10 @@ export function dailyTotals(events: BabyEvent[], now: number, days: number): Day
           t.ml += e.details.ml ?? 0
         } else if (e.type === 'diaper') {
           t.diapers += 1
+        } else if (e.type === 'pump') {
+          t.pumps += 1
+          t.pumpMl += e.details.ml ?? 0
+          t.pumpMs += (e.endedAt ?? e.startedAt) - e.startedAt
         }
       }
     }
@@ -73,6 +91,21 @@ export function feedGapsByDay(
   })
 }
 
+/** Average time between pump sessions since `since`. Gaps under 30 min or over 12 h are ignored. */
+export function pumpGapMs(events: BabyEvent[], since: number): number | null {
+  const starts = events
+    .filter((e) => e.type === 'pump' && e.startedAt >= since)
+    .map((e) => e.startedAt)
+    .sort((a, b) => a - b)
+
+  const gaps: number[] = []
+  for (let i = 1; i < starts.length; i++) {
+    const gap = starts[i] - starts[i - 1]
+    if (gap >= 30 * MIN && gap <= 12 * HOUR) gaps.push(gap)
+  }
+  return gaps.length ? gaps.reduce((s, g) => s + g, 0) / gaps.length : null
+}
+
 export interface Highlights {
   avgFeeds: number
   avgGapMs: number | null
@@ -80,6 +113,12 @@ export interface Highlights {
   avgMl: number
   longestSleepMs: number
   daysCounted: number
+  /** breast pump: sessions and ml per day, ml and time per session, time between sessions */
+  avgPumps: number
+  avgPumpMl: number
+  avgPumpSessionMl: number | null
+  avgPumpMs: number | null
+  avgPumpGapMs: number | null
 }
 
 /**
@@ -89,12 +128,14 @@ export interface Highlights {
 export function highlights(events: BabyEvent[], now: number, days: number): Highlights {
   const totals = dailyTotals(events, now, days)
   const today = startOfDay(now).getTime()
-  const active = totals.filter((t) => t.feeds > 0 || t.sleepMs > 0 || t.diapers > 0)
+  const active = totals.filter(
+    (t) => t.feeds > 0 || t.sleepMs > 0 || t.diapers > 0 || t.pumps > 0,
+  )
   const complete = active.filter((t) => t.day !== today)
   const counted = complete.length > 0 ? complete : active
   const n = counted.length
-  const avg = (pick: (t: DayTotals) => number) =>
-    n ? counted.reduce((s, t) => s + pick(t), 0) / n : 0
+  const sum = (pick: (t: DayTotals) => number) => counted.reduce((s, t) => s + pick(t), 0)
+  const avg = (pick: (t: DayTotals) => number) => (n ? sum(pick) / n : 0)
 
   const countedDays = new Set(counted.map((t) => t.day))
   const gapDays = feedGapsByDay(events, now, days).filter(
@@ -106,6 +147,8 @@ export function highlights(events: BabyEvent[], now: number, days: number): High
     .filter((e) => e.type === 'sleep' && e.startedAt >= first)
     .reduce((max, e) => Math.max(max, (e.endedAt ?? now) - e.startedAt), 0)
 
+  const pumpSessions = sum((t) => t.pumps)
+
   return {
     avgFeeds: avg((t) => t.feeds),
     avgGapMs: gapDays.length
@@ -115,6 +158,11 @@ export function highlights(events: BabyEvent[], now: number, days: number): High
     avgMl: avg((t) => t.ml),
     longestSleepMs,
     daysCounted: n,
+    avgPumps: avg((t) => t.pumps),
+    avgPumpMl: avg((t) => t.pumpMl),
+    avgPumpSessionMl: pumpSessions ? sum((t) => t.pumpMl) / pumpSessions : null,
+    avgPumpMs: pumpSessions ? sum((t) => t.pumpMs) / pumpSessions : null,
+    avgPumpGapMs: pumpGapMs(events, first),
   }
 }
 

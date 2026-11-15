@@ -28,6 +28,7 @@ export const EVENT_EMOJI: Record<EventType, string> = {
   sleep: '😴',
   you: '🧘',
   diaper: '🧷',
+  pump: '🥛',
 }
 
 export const EVENT_LABEL: Record<EventType, string> = {
@@ -36,4 +37,5 @@ export const EVENT_LABEL: Record<EventType, string> = {
   sleep: 'Sleep',
   you: 'You time',
   diaper: 'Diaper',
+  pump: 'Pump',
 }

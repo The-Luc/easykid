@@ -4,7 +4,7 @@ import Chips from './Chips'
 import Sheet from './Sheet'
 import TimeField from './TimeField'
 import WheelField from './WheelField'
-import { isPhase } from '../lib/events'
+import { isPhase, lastPumpMl } from '../lib/events'
 import { formatDuration, formatTime } from '../lib/format'
 import { EVENT_EMOJI, EVENT_LABEL } from '../lib/meta'
 import { eventStore } from '../lib/store'
@@ -15,7 +15,7 @@ type Side = NonNullable<EventDetails['side']>
 type Diaper = NonNullable<EventDetails['diaper']>
 
 const ADD_TYPES: { value: EventType; label: string }[] = (
-  ['eat', 'diaper', 'sleep', 'activity', 'you'] as const
+  ['eat', 'diaper', 'sleep', 'activity', 'you', 'pump'] as const
 ).map((t) => ({ value: t, label: `${EVENT_EMOJI[t]} ${EVENT_LABEL[t]}` }))
 
 const SIDES: { value: Side; label: string }[] = [
@@ -31,6 +31,13 @@ const DIAPERS: { value: Diaper; label: string }[] = [
   { value: 'both', label: 'Both' },
 ]
 
+// Pumping: "Both" first, because that is the usual session (and it is preselected)
+const PUMP_SIDES: { value: Side; label: string }[] = [
+  { value: 'both', label: 'Both' },
+  { value: 'left', label: 'Left' },
+  { value: 'right', label: 'Right' },
+]
+
 const ANCHORS: { value: Anchor; label: string }[] = [
   { value: 'start', label: 'Started' },
   { value: 'end', label: 'Ended' },
@@ -42,6 +49,7 @@ const DEFAULT_DURATION: Record<EventType, number> = {
   activity: 30,
   you: 30,
   diaper: 0,
+  pump: 20,
 }
 
 /**
@@ -64,7 +72,10 @@ export default function EventSheet({
   const editing = event !== undefined
   const running = event !== undefined && event.endedAt === null && isPhase(event.type)
 
-  const [type, setType] = useState<EventType>(event?.type ?? initialType ?? 'eat')
+  const startType: EventType = event?.type ?? initialType ?? 'eat'
+  const [type, setType] = useState<EventType>(startType)
+  // A pump amount starts from your last session, so it is usually a small nudge
+  const [pumpDefault] = useState(() => lastPumpMl(eventStore.getSnapshot()) ?? 100)
   // You set ONE time (the anchor: the start or the end) plus the duration, and the
   // other time is calculated. An existing entry opens on its start, which matches
   // the timer and the list; a new past entry opens on its end ("it just finished").
@@ -76,16 +87,23 @@ export default function EventSheet({
   const [duration, setDuration] = useState(() =>
     event && event.endedAt !== null
       ? Math.max(1, Math.round((event.endedAt - event.startedAt) / 60_000))
-      : DEFAULT_DURATION[event?.type ?? initialType ?? 'eat'],
+      : DEFAULT_DURATION[startType],
   )
-  // Older entries may have ml without a side: that was a bottle
+  // Older feeds may have ml without a side: that was a bottle. A new pump starts on "Both".
   const [side, setSide] = useState<Side | undefined>(
-    event?.details.side ?? (event?.details.ml ? 'bottle' : undefined),
+    event
+      ? (event.details.side ?? (event.type === 'eat' && event.details.ml ? 'bottle' : undefined))
+      : startType === 'pump'
+        ? 'both'
+        : undefined,
   )
-  const [ml, setMl] = useState(event?.details.ml ?? 90)
+  const [ml, setMl] = useState(event?.details.ml ?? (startType === 'pump' ? pumpDefault : 90))
   const [diaper, setDiaper] = useState<Diaper>(event?.details.diaper ?? 'wet')
   const [notes, setNotes] = useState(event?.notes ?? '')
-  const [showNote, setShowNote] = useState(Boolean(event?.notes))
+  // The note box starts open for a new pump (notes like "left side sore" are common)
+  const [showNote, setShowNote] = useState(
+    Boolean(event?.notes) || (!event && startType === 'pump'),
+  )
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const hasDuration = type !== 'diaper' && !running
@@ -104,6 +122,10 @@ export default function EventSheet({
     setType(t)
     setDuration(DEFAULT_DURATION[t])
     setCapped(false)
+    // Side and amount mean different things for a feed and a pump session: start fresh
+    setSide(t === 'pump' ? 'both' : undefined)
+    setMl(t === 'pump' ? pumpDefault : 90)
+    if (t === 'pump') setShowNote(true)
   }
 
   // Changing the duration only ever moves the calculated time. When the start is the
@@ -142,6 +164,10 @@ export default function EventSheet({
       if (side === 'bottle') details.ml = ml
     }
     if (type === 'diaper') details.diaper = diaper
+    if (type === 'pump') {
+      details.side = side && side !== 'bottle' ? side : 'both'
+      details.ml = ml
+    }
     const note = notes.trim() || undefined
 
     if (event && running) {
@@ -198,6 +224,27 @@ export default function EventSheet({
             />
           )}
 
+          {type === 'pump' && (
+            <>
+              <div className="field">
+                <span className="field-label">Side</span>
+                <Chips
+                  options={PUMP_SIDES}
+                  value={side}
+                  onChange={(v) => v && setSide(v)}
+                />
+              </div>
+              <WheelField
+                label="Amount"
+                value={ml}
+                max={500}
+                step={5}
+                unit="ml"
+                onChange={setMl}
+              />
+            </>
+          )}
+
           {type === 'diaper' && (
             <div className="field">
               <span className="field-label">Type</span>
@@ -209,8 +256,8 @@ export default function EventSheet({
             <WheelField
               label="How long"
               value={duration}
-              max={type === 'eat' ? 90 : 720}
-              step={type === 'eat' ? 1 : 5}
+              max={type === 'eat' || type === 'pump' ? 90 : 720}
+              step={type === 'eat' || type === 'pump' ? 1 : 5}
               unit="min"
               hint={duration >= 60 ? `= ${formatDuration(duration * 60_000)}` : undefined}
               onChange={changeDuration}

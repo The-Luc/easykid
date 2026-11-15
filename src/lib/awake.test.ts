@@ -153,3 +153,16 @@ describe('awakeSince', () => {
     expect(awakeSince(events, at(50))).toBe(at(20))
   })
 })
+
+describe('breast pump', () => {
+  it('does not change the calculated activity (a pump is not baby awake time)', () => {
+    const events = [
+      mk('eat1', 'eat', at(0), at(20)),
+      { ...mk('p', 'pump', at(25), at(45)), details: { side: 'both' as const, ml: 100 } },
+      mk('s1', 'sleep', at(60), at(120)),
+    ]
+    const [a] = derivedActivity(events, at(200))
+    expect(derivedActivity(events, at(200))).toHaveLength(1)
+    expect(a).toMatchObject({ startedAt: at(20), endedAt: at(60) })
+  })
+})
