@@ -119,25 +119,105 @@
 /* ---------- Timeline ---------- */
 .timeline {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin-top: 4px;
 }
 
-.tl-track {
+.tl-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.tl-board {
   position: relative;
-  height: 44px;
-  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  min-width: 760px;
+  padding-right: 16px;
+}
+
+.tl-row,
+.tl-axis,
+.tl-now-wrap {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+}
+
+.tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  gap: 1px;
+  padding-right: 8px;
+  background: var(--surface, var(--bg));
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.tl-label small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tl-plot {
+  position: relative;
+}
+
+.tl-lane {
+  height: 40px;
+  border-radius: 10px;
   background:
-    linear-gradient(to right, var(--line) 1px, transparent 1px) 25% 0 / 25% 100% repeat-x,
+    linear-gradient(to right, var(--ink-2) 1px, transparent 1px) 0 0 / 25% 100% repeat-x,
+    linear-gradient(to right, var(--line) 1px, transparent 1px) 0 0 / calc(100% / 24) 100% repeat-x,
     var(--surface-2);
   overflow: hidden;
 }
 
+.tl-axis {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tl-axis .tl-plot {
+  height: 14px;
+}
+
+.tl-axis .tl-plot span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
 .tl-seg {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  border-radius: 6px;
+  top: 5px;
+  bottom: 5px;
+  min-width: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tl-seg.picked,
+.tl-dot.picked {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  z-index: 2;
 }
 
 .tl-seg.eat {
@@ -145,7 +225,7 @@
 }
 .tl-seg.activity {
   background: var(--activity);
-  opacity: 0.8;
+  opacity: 0.85;
 }
 .tl-seg.sleep {
   background: var(--sleep);
@@ -153,23 +233,63 @@
 .tl-seg.you {
   background: var(--you);
 }
+.tl-seg.pump {
+  background: var(--pump);
+}
 
 .tl-dot {
   position: absolute;
-  top: 2px;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: var(--ink);
+  cursor: pointer;
 }
 
-.tl-axis {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
+.tl-now-wrap {
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  left: 0;
+  right: 16px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tl-now-wrap .tl-plot {
+  height: 100%;
+}
+
+.tl-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #ef4444;
+}
+
+.tl-now::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.tl-detail {
+  margin: 0;
+  min-height: 20px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
 .tl-legend {
@@ -198,9 +318,17 @@
 .tl-legend i.sleep {
   background: var(--sleep);
 }
+.tl-legend i.pump {
+  background: var(--pump);
+}
 .tl-legend i.dot {
   border-radius: 50%;
   background: var(--ink);
+}
+.tl-legend i.now {
+  width: 3px;
+  border-radius: 2px;
+  background: #ef4444;
 }
 
 /* ---------- Growth rows ---------- */
