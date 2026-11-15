@@ -1,4 +1,5 @@
 import type { BabyEvent } from '../types'
+import { DERIVED_PREFIX, withDerived } from '../lib/awake'
 import { formatTime } from '../lib/format'
 import { EVENT_LABEL } from '../lib/meta'
 import { timeline } from '../lib/stats'
@@ -13,7 +14,8 @@ export default function Timeline({
   day: number
   now: number
 }) {
-  const { segments, diapers } = timeline(events, day, now)
+  // calculated activity (awake time after a feed) is drawn hatched
+  const { segments, diapers } = timeline(withDerived(events, now), day, now)
 
   return (
     <div className="timeline">
@@ -21,7 +23,7 @@ export default function Timeline({
         {segments.map((s) => (
           <span
             key={s.id}
-            className={`tl-seg ${s.type}`}
+            className={`tl-seg ${s.type}${s.id.startsWith(DERIVED_PREFIX) ? ' auto' : ''}`}
             style={{
               left: `${s.from * 100}%`,
               width: `${Math.max(0.5, (s.to - s.from) * 100)}%`,
@@ -51,6 +53,9 @@ export default function Timeline({
         </span>
         <span>
           <i className="activity" /> Activity
+        </span>
+        <span>
+          <i className="auto" /> Auto
         </span>
         <span>
           <i className="sleep" /> Sleep

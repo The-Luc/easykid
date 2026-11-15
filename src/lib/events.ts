@@ -41,24 +41,18 @@ export function startPhase(
 }
 
 /**
- * Stop the running phase. Finishing a feed automatically starts Activity
- * (the E.A.S.Y. flow), using `autoId` for the new event.
+ * Stop the running phase and keep it as a record. Nothing is started afterwards:
+ * Activity is calculated from eat and sleep times (see awake.ts).
  */
-export function stopPhase(
-  events: BabyEvent[],
-  now: number,
-  autoId: string,
-): BabyEvent[] {
+export function stopPhase(events: BabyEvent[], now: number): BabyEvent[] {
+  if (!getOpenPhase(events)) return events
+  return closeOpenPhases(events, now)
+}
+
+/** Discard the running phase entirely (for a timer started by mistake). No record is kept. */
+export function cancelPhase(events: BabyEvent[]): BabyEvent[] {
   const open = getOpenPhase(events)
-  if (!open) return events
-  const closed = closeOpenPhases(events, now)
-  if (open.type === 'eat') {
-    return [
-      ...closed,
-      { id: autoId, type: 'activity', startedAt: now, endedAt: null, details: {} },
-    ]
-  }
-  return closed
+  return open ? events.filter((e) => e.id !== open.id) : events
 }
 
 /** Events that started on the same calendar day as `day`, newest first. */

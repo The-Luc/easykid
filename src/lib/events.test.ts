@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BabyEvent } from '../types'
 import {
+  cancelPhase,
   daySummary,
   eventsOnDay,
   getOpenPhase,
@@ -32,11 +33,10 @@ describe('startPhase', () => {
     expect(getOpenPhase(next)?.id).toBe('b')
   })
 
-  it('ends the auto-started activity when sleep starts', () => {
-    const afterFeed = stopPhase(startPhase([], 'eat', T, 'a'), T + 15 * MIN, 'b')
+  it('does not create an activity between a feed and a sleep (activity is calculated)', () => {
+    const afterFeed = stopPhase(startPhase([], 'eat', T, 'a'), T + 15 * MIN)
     const next = startPhase(afterFeed, 'sleep', T + 45 * MIN, 'c')
-    expect(next.find((e) => e.id === 'b')?.endedAt).toBe(T + 45 * MIN)
-    expect(getOpenPhase(next)?.type).toBe('sleep')
+    expect(next.map((e) => e.type)).toEqual(['eat', 'sleep'])
   })
 
   it('does nothing when the same phase is already running', () => {
@@ -46,24 +46,44 @@ describe('startPhase', () => {
 })
 
 describe('stopPhase', () => {
-  it('ends a feed and auto-starts activity', () => {
+  it('ends a feed and keeps it, without starting anything else', () => {
     const running = startPhase([], 'eat', T, 'a')
-    const next = stopPhase(running, T + 15 * MIN, 'b')
-    expect(next.find((e) => e.id === 'a')?.endedAt).toBe(T + 15 * MIN)
-    const open = getOpenPhase(next)
-    expect(open?.type).toBe('activity')
-    expect(open?.startedAt).toBe(T + 15 * MIN)
-  })
-
-  it('does not start anything after sleep', () => {
-    const running = startPhase([], 'sleep', T, 'a')
-    const next = stopPhase(running, T + 60 * MIN, 'b')
-    expect(getOpenPhase(next)).toBeUndefined()
+    const next = stopPhase(running, T + 15 * MIN)
     expect(next).toHaveLength(1)
+    expect(next[0].endedAt).toBe(T + 15 * MIN)
+    expect(getOpenPhase(next)).toBeUndefined()
   })
 
-  it('does nothing when idle', () => {
-    expect(stopPhase([], T, 'x')).toEqual([])
+  it('ends sleep', () => {
+    const next = stopPhase(startPhase([], 'sleep', T, 'a'), T + 60 * MIN)
+    expect(next[0].endedAt).toBe(T + 60 * MIN)
+  })
+
+  it('returns the same list when nothing is running', () => {
+    const idle: BabyEvent[] = [mk('x', 'eat', T, T + MIN)]
+    expect(stopPhase(idle, T + 5 * MIN)).toBe(idle)
+  })
+})
+
+describe('cancelPhase', () => {
+  it('discards the running timer completely', () => {
+    const running = startPhase([], 'eat', T, 'a')
+    expect(cancelPhase(running)).toEqual([])
+  })
+
+  it('keeps finished entries and only removes the running one', () => {
+    const events = [mk('done', 'eat', T - 60 * MIN, T - 45 * MIN), mk('run', 'sleep', T, null)]
+    expect(cancelPhase(events).map((e) => e.id)).toEqual(['done'])
+  })
+
+  it('does nothing when no timer is running', () => {
+    const idle: BabyEvent[] = [mk('x', 'eat', T, T + MIN)]
+    expect(cancelPhase(idle)).toBe(idle)
+  })
+
+  it('never touches diapers', () => {
+    const events = [mk('d', 'diaper', T, T), mk('run', 'eat', T, null)]
+    expect(cancelPhase(events).map((e) => e.id)).toEqual(['d'])
   })
 })
 

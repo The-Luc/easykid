@@ -1,4 +1,5 @@
 import type { BabyEvent } from '../types'
+import { isDerived } from '../lib/awake'
 import { EVENT_EMOJI, EVENT_LABEL } from '../lib/meta'
 import { formatDuration, formatTime } from '../lib/format'
 
@@ -23,7 +24,7 @@ function summary(e: BabyEvent, now: number): string {
   return parts.join(' · ')
 }
 
-/** Tap a row to edit it. */
+/** Tap a row to edit it. Calculated (auto) rows are shown muted and cannot be edited. */
 export default function EventList({
   events,
   now,
@@ -38,26 +39,52 @@ export default function EventList({
   if (events.length === 0) return <p className="muted">{empty}</p>
   return (
     <ul className="events">
-      {events.map((e) => (
-        <li key={e.id}>
-          <button
-            type="button"
-            className={`event ${e.type}`}
-            aria-label={`Edit ${EVENT_LABEL[e.type]} at ${formatTime(e.startedAt)}`}
-            onClick={() => onSelect(e)}
-          >
-            <span className="event-icon">{EVENT_EMOJI[e.type]}</span>
-            <span className="event-main">
-              <span className="event-title">{EVENT_LABEL[e.type]}</span>
-              <span className="event-sub">{summary(e, now) || ' '}</span>
-            </span>
-            <span className="event-time">{formatTime(e.startedAt)}</span>
-            <span className="event-chev" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        </li>
-      ))}
+      {events.map((e) => {
+        if (isDerived(e)) {
+          return (
+            <li key={e.id}>
+              <div
+                className="event event-auto"
+                title="Calculated from your eat and sleep times"
+              >
+                <span className="event-icon">{EVENT_EMOJI.activity}</span>
+                <span className="event-main">
+                  <span className="event-title">
+                    {EVENT_LABEL.activity} <span className="auto-tag">auto</span>
+                  </span>
+                  <span className="event-sub">
+                    Calculated · {formatDuration((e.endedAt ?? now) - e.startedAt)}
+                    {e.endedAt === null ? ' so far' : ''}
+                  </span>
+                </span>
+                <span className="event-time">{formatTime(e.startedAt)}</span>
+                <span />
+              </div>
+            </li>
+          )
+        }
+
+        return (
+          <li key={e.id}>
+            <button
+              type="button"
+              className={`event ${e.type}`}
+              aria-label={`Edit ${EVENT_LABEL[e.type]} at ${formatTime(e.startedAt)}`}
+              onClick={() => onSelect(e)}
+            >
+              <span className="event-icon">{EVENT_EMOJI[e.type]}</span>
+              <span className="event-main">
+                <span className="event-title">{EVENT_LABEL[e.type]}</span>
+                <span className="event-sub">{summary(e, now) || ' '}</span>
+              </span>
+              <span className="event-time">{formatTime(e.startedAt)}</span>
+              <span className="event-chev" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          </li>
+        )
+      })}
     </ul>
   )
 }

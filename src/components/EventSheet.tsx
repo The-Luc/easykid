@@ -13,7 +13,7 @@ type Side = NonNullable<EventDetails['side']>
 type Diaper = NonNullable<EventDetails['diaper']>
 
 const ADD_TYPES: { value: EventType; label: string }[] = (
-  ['eat', 'diaper', 'sleep', 'activity'] as const
+  ['eat', 'diaper', 'sleep', 'activity', 'you'] as const
 ).map((t) => ({ value: t, label: `${EVENT_EMOJI[t]} ${EVENT_LABEL[t]}` }))
 
 const SIDES: { value: Side; label: string }[] = [
@@ -43,10 +43,13 @@ const DEFAULT_DURATION: Record<EventType, number> = {
  */
 export default function EventSheet({
   event,
+  initialType,
   defaultEnd,
   onClose,
 }: {
   event?: BabyEvent
+  /** Type preselected for a new entry (for example when tapping the A or Y tile) */
+  initialType?: EventType
   /** Initial time for a new entry (defaults to now) */
   defaultEnd?: number
   onClose: () => void
@@ -54,14 +57,14 @@ export default function EventSheet({
   const editing = event !== undefined
   const running = event !== undefined && event.endedAt === null && isPhase(event.type)
 
-  const [type, setType] = useState<EventType>(event?.type ?? 'eat')
+  const [type, setType] = useState<EventType>(event?.type ?? initialType ?? 'eat')
   const [timeAt, setTimeAt] = useState(() =>
     event ? (event.endedAt ?? event.startedAt) : (defaultEnd ?? Date.now()),
   )
   const [duration, setDuration] = useState(() =>
     event && event.endedAt !== null
       ? Math.max(1, Math.round((event.endedAt - event.startedAt) / 60_000))
-      : DEFAULT_DURATION[event?.type ?? 'eat'],
+      : DEFAULT_DURATION[event?.type ?? initialType ?? 'eat'],
   )
   // Older entries may have ml without a side: that was a bottle
   const [side, setSide] = useState<Side | undefined>(

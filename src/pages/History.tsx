@@ -5,6 +5,7 @@ import DayNav from '../components/DayNav'
 import DayStats from '../components/DayStats'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
+import { withDerived } from '../lib/awake'
 import { daySummary, eventsOnDay } from '../lib/events'
 import { useEvents, useNow } from '../lib/hooks'
 import type { BabyEvent } from '../types'
@@ -15,7 +16,8 @@ export default function History() {
   const [day, setDay] = useState(() => startOfDay(Date.now()))
   const [sheet, setSheet] = useState<{ event?: BabyEvent } | null>(null)
 
-  const list = eventsOnDay(events, day.getTime())
+  // calculated activity is included for display only
+  const list = eventsOnDay(withDerived(events, now), day.getTime())
   const summary = daySummary(events, day.getTime(), now)
 
   return (

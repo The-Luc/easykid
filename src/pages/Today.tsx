@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import PageHead from '../components/PageHead'
@@ -7,6 +7,7 @@ import DayStats from '../components/DayStats'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
 import SyncPill from '../components/SyncPill'
+import { awakeSince, withDerived } from '../lib/awake'
 import { daySummary, eventsOnDay, getOpenPhase } from '../lib/events'
 import { formatClock, formatDuration, formatTime } from '../lib/format'
 import { useEvents, useNow, useStore } from '../lib/hooks'
@@ -15,7 +16,7 @@ import { predictNextFeed } from '../lib/predict'
 import { eventStore } from '../lib/store'
 import { ageInWeeks, ageLabel } from '../lib/age'
 import { profileStore } from '../lib/stores'
-import type { BabyEvent, EventDetails } from '../types'
+import type { BabyEvent, EventDetails, EventType } from '../types'
 
 const SIDES = [
   { value: 'left' as const, label: 'Left' },
@@ -36,11 +37,34 @@ function greeting(now: number) {
 export default function Today() {
   const events = useEvents()
   const now = useNow(1000)
-  const [sheet, setSheet] = useState<{ event?: BabyEvent } | null>(null)
+  const [sheet, setSheet] = useState<{ event?: BabyEvent; type?: EventType } | null>(null)
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null)
 
   const open = getOpenPhase(events)
-  const today = eventsOnDay(events, now)
+  // Activity is calculated from eat and sleep times; it is shown but never saved
+  const today = eventsOnDay(withDerived(events, now), now)
+  const awake = awakeSince(events, now)
+  const activityMs = today
+    .filter((e) => e.type === 'activity')
+    .reduce((sum, e) => sum + ((e.endedAt ?? now) - e.startedAt), 0)
   const summary = daySummary(events, now, now)
+
+  // "Tap again to discard" goes back to "Cancel" after a few seconds
+  useEffect(() => {
+    if (!confirmCancel) return
+    const t = setTimeout(() => setConfirmCancel(null), 4000)
+    return () => clearTimeout(t)
+  }, [confirmCancel])
+
+  const cancelTimer = () => {
+    if (!open) return
+    if (confirmCancel === open.id) {
+      eventStore.cancelPhase()
+      setConfirmCancel(null)
+    } else {
+      setConfirmCancel(open.id)
+    }
+  }
   const profile = useStore(profileStore)
   const age = ageLabel(profile.birthDate, now)
   const prediction = predictNextFeed(events, now, ageInWeeks(profile.birthDate, now))
@@ -108,13 +132,18 @@ export default function Today() {
                 )}
               </div>
             )}
-            <button
-              type="button"
-              className="btn btn-light"
-              onClick={() => eventStore.stopPhase()}
-            >
-              {open.type === 'eat' ? 'Done eating' : 'Stop'}
-            </button>
+            <div className="current-actions">
+              <button
+                type="button"
+                className="btn btn-light"
+                onClick={() => eventStore.stopPhase()}
+              >
+                {open.type === 'eat' ? 'Done eating' : 'Stop'}
+              </button>
+              <button type="button" className="btn btn-ghost-light" onClick={cancelTimer}>
+                {confirmCancel === open.id ? 'Tap again to discard' : 'Cancel'}
+              </button>
+            </div>
             <button
               type="button"
               className="link-btn link-light"
@@ -125,8 +154,20 @@ export default function Today() {
           </section>
         ) : (
           <section className="card idle">
-            <p className="idle-title">Nothing running</p>
-            <p className="muted">Tap Eat or Sleep to start the timer.</p>
+            {awake !== undefined ? (
+              <>
+                <p className="idle-title">Awake {formatDuration(now - awake)}</p>
+                <p className="muted">
+                  Since {formatTime(awake)} · activity is calculated for you. Tap Eat or
+                  Sleep when it is time.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="idle-title">Nothing running</p>
+                <p className="muted">Tap Eat or Sleep to start the timer.</p>
+              </>
+            )}
           </section>
         )}
 
@@ -135,21 +176,34 @@ export default function Today() {
           {PHASES.map((p) => {
             const meta = PHASE_META[p]
 
-            // Y is calculated from sleep, not tapped
-            if (p === 'you') {
+            // A and Y are calculated from your eat and sleep times, so they are
+            // shown a bit gray with an AUTO badge. Tapping one still lets you
+            // add that record by hand (a timer would clash with a running sleep).
+            if (p === 'activity' || p === 'you') {
+              const isActivity = p === 'activity'
+              const live = isActivity ? awake !== undefined : open?.type === 'sleep'
+              const hint = isActivity
+                ? awake !== undefined
+                  ? `Awake ${formatDuration(now - awake)}`
+                  : activityMs > 0
+                    ? `${formatDuration(activityMs)} today`
+                    : meta.hint
+                : summary.sleepMs > 0
+                  ? `${formatDuration(summary.sleepMs)} free today`
+                  : meta.hint
               return (
-                <div
+                <button
                   key={p}
-                  className={`phase you${open?.type === 'sleep' ? ' active' : ''}`}
+                  type="button"
+                  className={`phase auto ${p}${live ? ' live' : ''}`}
+                  aria-label={`${meta.name}: calculated automatically (${hint}). Tap to add a ${meta.name.toLowerCase()} entry by hand.`}
+                  onClick={() => setSheet({ type: p })}
                 >
+                  <span className="auto-badge">AUTO</span>
                   <span className="letter">{meta.letter}</span>
                   <span className="name">{meta.name}</span>
-                  <span className="hint">
-                    {summary.sleepMs > 0
-                      ? `${formatDuration(summary.sleepMs)} free today`
-                      : meta.hint}
-                  </span>
-                </div>
+                  <span className="hint">{hint}</span>
+                </button>
               )
             }
 
@@ -230,8 +284,9 @@ export default function Today() {
 
       {sheet && (
         <EventSheet
-          key={sheet.event?.id ?? 'new'}
+          key={sheet.event?.id ?? `new-${sheet.type ?? 'any'}`}
           event={sheet.event}
+          initialType={sheet.type}
           onClose={() => setSheet(null)}
         />
       )}

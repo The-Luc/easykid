@@ -247,3 +247,106 @@
   color: #e5484d;
   font-weight: 650;
 }
+
+/* ---------- Calculated (auto) things: gray, so they read as "not tappable / not logged" ---------- */
+/* Still tappable (they open the add sheet), just a bit gray: the phase color mixed with gray */
+.phase.auto {
+  position: relative;
+}
+
+.phase.auto.activity {
+  background: color-mix(in srgb, var(--activity-soft) 35%, var(--surface-2));
+}
+
+.phase.auto.you {
+  background: color-mix(in srgb, var(--you-soft) 35%, var(--surface-2));
+}
+
+.phase.auto.activity .letter {
+  color: color-mix(in srgb, var(--activity) 45%, var(--ink-2));
+}
+
+.phase.auto.you .letter {
+  color: color-mix(in srgb, var(--you) 45%, var(--ink-2));
+}
+
+.phase.auto .name {
+  color: color-mix(in srgb, var(--ink) 65%, var(--ink-2));
+}
+
+.phase.auto .hint {
+  color: var(--ink-2);
+}
+
+/* the calculated value is live right now (awake, or baby asleep): dashed, since it is not a timer */
+.phase.auto.live {
+  outline: 2px dashed var(--ink-2);
+  outline-offset: -2px;
+}
+
+.auto-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.event-auto {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.event-auto:active {
+  opacity: 0.85;
+}
+
+.event-auto .event-icon {
+  background: var(--surface-2);
+  filter: grayscale(1);
+}
+
+.event-auto .event-sub {
+  font-style: italic;
+}
+
+.auto-tag {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* hatched = calculated */
+.tl-seg.activity.auto {
+  background: repeating-linear-gradient(135deg, var(--ink-2) 0 3px, transparent 3px 7px);
+  opacity: 0.55;
+}
+
+.tl-legend i.auto {
+  background: repeating-linear-gradient(135deg, var(--ink-2) 0 2px, transparent 2px 4px);
+}
+
+/* ---------- Running-timer actions ---------- */
+.current-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.btn-ghost-light {
+  background: transparent;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+}

@@ -10,7 +10,7 @@ export const PHASE_META: Record<
   activity: {
     letter: 'A',
     name: 'Activity',
-    hint: 'Starts after eating',
+    hint: 'Calculated from eat & sleep',
     active: 'Awake & playing',
   },
   sleep: { letter: 'S', name: 'Sleep', hint: 'Nap or night', active: 'Sleeping' },

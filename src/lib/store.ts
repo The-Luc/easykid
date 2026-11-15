@@ -1,5 +1,5 @@
 import type { BabyEvent, PhaseType } from '../types'
-import { startPhase, stopPhase } from './events'
+import { cancelPhase, startPhase, stopPhase } from './events'
 import { newId } from './id'
 
 const KEY = 'easykid.events.v1'
@@ -53,7 +53,11 @@ export const eventStore = {
     commit(startPhase(cache, type, Date.now(), newId()))
   },
   stopPhase() {
-    commit(stopPhase(cache, Date.now(), newId()))
+    commit(stopPhase(cache, Date.now()))
+  },
+  /** Throw away the running timer without saving a record. */
+  cancelPhase() {
+    commit(cancelPhase(cache))
   },
   add(event: Omit<BabyEvent, 'id'>) {
     commit([...cache, { ...event, id: newId() }])
