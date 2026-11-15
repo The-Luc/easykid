@@ -1,6 +1,6 @@
 import type { BabyEvent } from '../types'
 import { isDerived } from '../lib/awake'
-import { EVENT_EMOJI, EVENT_LABEL } from '../lib/meta'
+import { EVENT_EMOJI, EVENT_LABEL, eatEmoji } from '../lib/meta'
 import { formatDuration, formatTime } from '../lib/format'
 
 const SIDE = {
@@ -30,7 +30,7 @@ function summary(e: BabyEvent, now: number): string {
   return parts.join(' · ')
 }
 
-/** Tap a row to edit it. Calculated (auto) rows are shown muted and cannot be edited. */
+/** Tap a row to edit it. Calculated (auto) rows are shown muted; editing their time makes them manual. */
 export default function EventList({
   events,
   now,
@@ -49,9 +49,12 @@ export default function EventList({
         if (isDerived(e)) {
           return (
             <li key={e.id}>
-              <div
+              <button
+                type="button"
                 className="event event-auto"
                 title="Calculated from your eat and sleep times"
+                aria-label={`Edit ${EVENT_LABEL.activity} at ${formatTime(e.startedAt)}`}
+                onClick={() => onSelect(e)}
               >
                 <span className="event-icon">{EVENT_EMOJI.activity}</span>
                 <span className="event-main">
@@ -61,11 +64,14 @@ export default function EventList({
                   <span className="event-sub">
                     Calculated · {formatDuration((e.endedAt ?? now) - e.startedAt)}
                     {e.endedAt === null ? ' so far' : ''}
+                    {e.notes ? ` · ${e.notes}` : ''}
                   </span>
                 </span>
                 <span className="event-time">{formatTime(e.startedAt)}</span>
-                <span />
-              </div>
+                <span className="event-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
             </li>
           )
         }
@@ -78,7 +84,9 @@ export default function EventList({
               aria-label={`Edit ${EVENT_LABEL[e.type]} at ${formatTime(e.startedAt)}`}
               onClick={() => onSelect(e)}
             >
-              <span className="event-icon">{EVENT_EMOJI[e.type]}</span>
+              <span className="event-icon">
+                {e.type === 'eat' ? eatEmoji(e.details) : EVENT_EMOJI[e.type]}
+              </span>
               <span className="event-main">
                 <span className="event-title">{EVENT_LABEL[e.type]}</span>
                 <span className="event-sub">{summary(e, now) || ' '}</span>

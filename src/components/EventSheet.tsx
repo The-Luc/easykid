@@ -5,6 +5,7 @@ import MilkSection from './MilkSection'
 import Sheet from './Sheet'
 import TimeField from './TimeField'
 import WheelField from './WheelField'
+import { derivedSourceId, isDerived } from '../lib/awake'
 import { isPhase, lastPumpMl } from '../lib/events'
 import { formatDuration, formatTime } from '../lib/format'
 import { useEvents, useStore } from '../lib/hooks'
@@ -25,9 +26,9 @@ const ADD_TYPES: { value: EventType; label: string }[] = (
 ).map((t) => ({ value: t, label: `${EVENT_EMOJI[t]} ${EVENT_LABEL[t]}` }))
 
 const SIDES: { value: Side; label: string }[] = [
-  { value: 'left', label: 'Left' },
-  { value: 'right', label: 'Right' },
-  { value: 'both', label: 'Both' },
+  { value: 'left', label: '🤱 Left' },
+  { value: 'right', label: '🤱 Right' },
+  { value: 'both', label: '🤱 Both' },
   { value: 'bottle', label: '🍼 Bottle' },
 ]
 
@@ -89,6 +90,8 @@ export default function EventSheet({
 }) {
   const editing = event !== undefined
   const running = event !== undefined && event.endedAt === null && isPhase(event.type)
+  // A calculated activity: a comment keeps it automatic, changing a time makes it manual
+  const auto = event !== undefined && isDerived(event)
 
   const events = useEvents()
   const bags = useStore(bagStore)
@@ -106,6 +109,7 @@ export default function EventSheet({
     event ? event.startedAt : (defaultEnd ?? Date.now()),
   )
   const [capped, setCapped] = useState(false)
+  const [timeEdited, setTimeEdited] = useState(false)
   const [duration, setDuration] = useState(() =>
     event && event.endedAt !== null
       ? Math.max(1, Math.round((event.endedAt - event.startedAt) / 60_000))
@@ -188,12 +192,14 @@ export default function EventSheet({
   // Changing the duration only ever moves the calculated time. When the start is the
   // anchor the entry may not end in the future, so the duration is capped.
   const changeDuration = (minutes: number) => {
+    setTimeEdited(true)
     const next = clampDuration(anchor, anchorAt, minutes, Date.now())
     setCapped(next < Math.round(minutes))
     setDuration(next)
   }
 
   const changeAnchorAt = (ms: number) => {
+    setTimeEdited(true)
     setAnchorAt(ms)
     const next = clampDuration(anchor, ms, duration, Date.now())
     setCapped(next < duration)
@@ -231,6 +237,29 @@ export default function EventSheet({
       if (felt) details.full = true
     }
     const note = notes.trim() || undefined
+
+    if (event && auto) {
+      const feed = events.find((e) => e.id === derivedSourceId(event))
+      // The comment moves to the new manual entry, or stays on the feed it follows
+      const { activityNote: _drop, ...feedDetails } = feed?.details ?? {}
+      if (timeEdited) {
+        // A running window becomes a real running Activity; it closes on the next eat or sleep
+        eventStore.add({
+          type: 'activity',
+          startedAt: running ? anchorAt : span.startedAt,
+          endedAt: running ? null : span.endedAt,
+          details: {},
+          notes: note,
+        })
+        if (feed && feed.details.activityNote) eventStore.update(feed.id, { details: feedDetails })
+      } else if (feed) {
+        eventStore.update(feed.id, {
+          details: note ? { ...feedDetails, activityNote: note } : feedDetails,
+        })
+      }
+      onClose()
+      return
+    }
 
     if (event && running) {
       eventStore.update(event.id, { startedAt: anchorAt, details, notes: note })
@@ -275,6 +304,12 @@ export default function EventSheet({
       onClose={onClose}
     >
       <div className="sheet-body">
+        {auto && (
+          <p className="muted small">
+            Calculated from your eat and sleep times. Add a note and it stays automatic;
+            change a time and it becomes a manual entry.
+          </p>
+        )}
         {!editing && (
           <Chips options={ADD_TYPES} value={type} onChange={(v) => v && changeType(v)} />
         )}
@@ -425,7 +460,7 @@ export default function EventSheet({
         <button type="button" className="btn btn-primary" onClick={save}>
           {editing ? 'Save changes' : 'Add'}
         </button>
-        {editing && (
+        {editing && !auto && (
           <button type="button" className="btn btn-danger" onClick={remove}>
             {confirmDelete ? 'Tap again to delete' : 'Delete'}
           </button>

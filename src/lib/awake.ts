@@ -3,7 +3,7 @@ import { getOpenPhase } from './events'
 
 /*
  * Activity is not something you log with a timer: it is the awake time between
- * the end of a feed and whatever comes next (sleep, or the next feed). It is
+ * the end of a feed or a sleep (a wake-up) and whatever comes next. It is
  * calculated here from eat and sleep entries, never stored, and so never synced;
  * every phone works out the same result from the same entries.
  */
@@ -19,9 +19,12 @@ export const DERIVED_PREFIX = 'auto:'
 /** True for calculated (not stored) activity entries. */
 export const isDerived = (e: Pick<BabyEvent, 'id'>) => e.id.startsWith(DERIVED_PREFIX)
 
+/** The id of the feed or sleep a calculated activity follows (where its comment is saved). */
+export const derivedSourceId = (e: Pick<BabyEvent, 'id'>) => e.id.slice(DERIVED_PREFIX.length)
+
 /**
- * Calculated activity entries, one per feed that is followed by a sensible awake window.
- * A window still open (nothing logged after the feed yet) has `endedAt: null`.
+ * Calculated activity entries, one per finished feed or sleep that is followed by a sensible
+ * awake window. A window still open (nothing logged after it yet) has `endedAt: null`.
  * If you logged an Activity yourself inside a window, yours wins and none is calculated.
  */
 export function derivedActivity(events: BabyEvent[], now: number): BabyEvent[] {
@@ -31,11 +34,11 @@ export function derivedActivity(events: BabyEvent[], now: number): BabyEvent[] {
   const manual = events.filter((e) => e.type === 'activity' && !isDerived(e))
   const out: BabyEvent[] = []
 
-  for (const feed of events) {
-    if (feed.type !== 'eat' || feed.endedAt === null) continue
+  for (const feed of anchors) {
+    if (feed.endedAt === null) continue
     const start = feed.endedAt
-    // The first feed or sleep that has not finished before this feed ended. A sleep that is
-    // running, or that overlaps the feed, is found too; its start is then at or before
+    // The first feed or sleep that has not finished before this one ended. One that is
+    // running, or that overlaps it, is found too; its start is then at or before
     // `start`, the window has no length, and it is skipped (the baby is not awake).
     const next = anchors.find((e) => e.id !== feed.id && (e.endedAt ?? Infinity) > start)
     const end = next ? next.startedAt : now
@@ -50,6 +53,8 @@ export function derivedActivity(events: BabyEvent[], now: number): BabyEvent[] {
       startedAt: start,
       endedAt: next ? end : null,
       details: {},
+      // A comment on a calculated activity lives on its feed, so it never makes it manual
+      ...(feed.details.activityNote ? { notes: feed.details.activityNote } : {}),
     })
   }
   return out

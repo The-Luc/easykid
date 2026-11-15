@@ -13,6 +13,8 @@ export interface EventDetails {
   bagIds?: string[]
   /** Pump sessions: the breast felt full or tense. */
   full?: boolean
+  /** On a feed: the comment for the calculated Activity that follows it (see lib/awake.ts). */
+  activityNote?: string
 }
 
 export interface Profile {

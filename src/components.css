@@ -209,6 +209,35 @@
   gap: 2px;
 }
 
+/* Tappable stat (Today): acts as a filter for the list below */
+.stat-btn {
+  border: 2px solid transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stat-btn:active {
+  transform: scale(0.97);
+}
+
+.stat-btn.active {
+  border-color: var(--ink-2);
+}
+
+.stats-row.five {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.stats-row.five .stat {
+  grid-column: span 2;
+}
+
+.stats-row.five .stat:nth-child(n + 4) {
+  grid-column: span 3;
+}
+
 .stat-num {
   font-size: 22px;
   font-weight: 800;

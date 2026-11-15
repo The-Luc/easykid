@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import PageHead from '../components/PageHead'
 import Chips from '../components/Chips'
-import DayStats from '../components/DayStats'
+import DayStats, { FILTER_LABEL } from '../components/DayStats'
+import { useStatFilter } from '../lib/useStatFilter'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
 import MilkSection from '../components/MilkSection'
 import SyncPill from '../components/SyncPill'
-import { awakeSince, withDerived } from '../lib/awake'
+import { awakeSince, derivedActivity, derivedSourceId, withDerived } from '../lib/awake'
 import { daySummary, eventsOnDay, getOpenPhase } from '../lib/events'
 import { formatClock, formatDuration, formatTime } from '../lib/format'
 import { useEvents, useNow, useStore } from '../lib/hooks'
@@ -21,9 +22,9 @@ import { bagStore, profileStore } from '../lib/stores'
 import type { BabyEvent, EventDetails, EventType } from '../types'
 
 const SIDES = [
-  { value: 'left' as const, label: 'Left' },
-  { value: 'right' as const, label: 'Right' },
-  { value: 'both' as const, label: 'Both' },
+  { value: 'left' as const, label: '🤱 Left' },
+  { value: 'right' as const, label: '🤱 Right' },
+  { value: 'both' as const, label: '🤱 Both' },
   { value: 'bottle' as const, label: '🍼 Bottle' },
 ]
 const ML = [30, 60, 90, 120, 150].map((v) => ({ value: v, label: `${v} ml` }))
@@ -41,15 +42,32 @@ export default function Today() {
   const now = useNow(1000)
   const [sheet, setSheet] = useState<{ event?: BabyEvent; type?: EventType } | null>(null)
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null)
+  // The note being typed for the running awake window (null: not editing)
+  const [noteDraft, setNoteDraft] = useState<string | null>(null)
 
   const open = getOpenPhase(events)
   // Activity is calculated from eat and sleep times; it is shown but never saved
   const today = eventsOnDay(withDerived(events, now), now)
   const awake = awakeSince(events, now)
+  // The calculated activity for the awake window that is running now (its note lives on
+  // the feed or sleep the window follows, so the row stays automatic)
+  const awakeWindow = derivedActivity(events, now).find((a) => a.endedAt === null)
+  const saveAwakeNote = () => {
+    const source = awakeWindow && events.find((e) => e.id === derivedSourceId(awakeWindow))
+    if (source) {
+      const { activityNote: _drop, ...rest } = source.details
+      const note = (noteDraft ?? '').trim()
+      eventStore.update(source.id, { details: note ? { ...rest, activityNote: note } : rest })
+    }
+    setNoteDraft(null)
+  }
   const activityMs = today
     .filter((e) => e.type === 'activity')
     .reduce((sum, e) => sum + ((e.endedAt ?? now) - e.startedAt), 0)
   const summary = daySummary(events, now, now)
+  // Tapping a stat filters the list; activity includes both auto and manual rows
+  const { filter, toggle: toggleFilter, listRef, lockedHeight } = useStatFilter()
+  const shown = filter ? today.filter((e) => e.type === filter) : today
 
   // "Tap again to discard" goes back to "Cancel" after a few seconds
   useEffect(() => {
@@ -189,6 +207,39 @@ export default function Today() {
                   Since {formatTime(awake)} · activity is calculated for you. Tap Eat or
                   Sleep when it is time.
                 </p>
+                {awakeWindow &&
+                  (noteDraft === null ? (
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => setNoteDraft(awakeWindow.notes ?? '')}
+                    >
+                      {awakeWindow.notes ? `📝 ${awakeWindow.notes} · Edit` : '+ Add note'}
+                    </button>
+                  ) : (
+                    <form
+                      className="note-row"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        saveAwakeNote()
+                      }}
+                    >
+                      <input
+                        className="input"
+                        type="text"
+                        autoFocus
+                        placeholder="Add a note (optional)"
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                      />
+                      <button type="submit" className="btn-pill sm">
+                        Save
+                      </button>
+                      <button type="button" className="link-btn" onClick={() => setNoteDraft(null)}>
+                        Cancel
+                      </button>
+                    </form>
+                  ))}
               </>
             ) : (
               <>
@@ -333,14 +384,20 @@ export default function Today() {
           )}
         </section>
 
-        <DayStats summary={summary} />
+        <DayStats
+          summary={summary}
+          activityMs={activityMs}
+          active={filter}
+          onToggle={toggleFilter}
+        />
 
         {/* Recent */}
         <section className="card">
-          <h2>Today</h2>
-          <div className="events-scroll">
+          <h2>{filter ? `Today · ${FILTER_LABEL[filter]}` : 'Today'}</h2>
+          <div className="events-scroll" ref={listRef} style={{ minHeight: lockedHeight }}>
             <EventList
-              events={today}
+              events={shown}
+              empty={filter ? `No ${FILTER_LABEL[filter].toLowerCase()} today` : undefined}
               now={now}
               onSelect={(event) => setSheet({ event })}
             />

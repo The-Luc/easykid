@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { addHours, isToday, startOfDay } from 'date-fns'
 import PageHead from '../components/PageHead'
 import DayNav from '../components/DayNav'
-import DayStats from '../components/DayStats'
+import DayStats, { FILTER_LABEL } from '../components/DayStats'
+import { useStatFilter } from '../lib/useStatFilter'
 import EventList from '../components/EventList'
 import EventSheet from '../components/EventSheet'
 import { withDerived } from '../lib/awake'
@@ -19,6 +20,11 @@ export default function History() {
   // calculated activity is included for display only
   const list = eventsOnDay(withDerived(events, now), day.getTime())
   const summary = daySummary(events, day.getTime(), now)
+  const activityMs = list
+    .filter((e) => e.type === 'activity')
+    .reduce((sum, e) => sum + ((e.endedAt ?? now) - e.startedAt), 0)
+  const { filter, toggle, reset, listRef, lockedHeight } = useStatFilter()
+  const shown = filter ? list.filter((e) => e.type === filter) : list
 
   return (
     <>
@@ -33,15 +39,28 @@ export default function History() {
       />
 
       <div className="stack">
-        <DayNav day={day} onChange={setDay} />
-        <DayStats summary={summary} />
+        <DayNav
+          day={day}
+          onChange={(d) => {
+            // A filter such as Pump may not exist on the new day
+            reset()
+            setDay(d)
+          }}
+        />
+        <DayStats summary={summary} activityMs={activityMs} active={filter} onToggle={toggle} />
         <section className="card">
-          <EventList
-            events={list}
-            now={now}
-            empty="No entries for this day"
-            onSelect={(event) => setSheet({ event })}
-          />
+          <div ref={listRef} style={{ minHeight: lockedHeight }}>
+            <EventList
+              events={shown}
+              now={now}
+              empty={
+                filter
+                  ? `No ${FILTER_LABEL[filter].toLowerCase()} on this day`
+                  : 'No entries for this day'
+              }
+              onSelect={(event) => setSheet({ event })}
+            />
+          </div>
         </section>
       </div>
 

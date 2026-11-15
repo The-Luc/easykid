@@ -13,11 +13,31 @@ const mk = (
   end: number | null,
 ): BabyEvent => ({ id, type, startedAt: start, endedAt: end, details: {} })
 
+/** Only the windows that start when a feed ends (the others start at a wake-up). */
+const afterFeeds = (events: BabyEvent[], now: number) =>
+  derivedActivity(events, now).filter(
+    (a) => events.find((e) => `auto:${e.id}` === a.id)?.type === 'eat',
+  )
+
 describe('derivedActivity', () => {
+  it('shows a comment saved on the feed and stays automatic', () => {
+    const feed = { ...mk('eat1', 'eat', at(0), at(20)), details: { activityNote: 'tummy time' } }
+    const events = [feed, mk('s1', 'sleep', at(60), at(120))]
+    const [a] = derivedActivity(events, at(200))
+    expect(a).toMatchObject({ id: 'auto:eat1', startedAt: at(20), endedAt: at(60), notes: 'tummy time' })
+  })
+
+  it('a manual activity replaces the calculated one, and a running one too', () => {
+    const feed = { ...mk('eat1', 'eat', at(0), at(20)), details: { activityNote: 'old' } }
+    expect(derivedActivity([feed, mk('m1', 'activity', at(25), at(50))], at(200))).toHaveLength(0)
+    // a running manual activity (an edited, still-open window) also wins
+    expect(derivedActivity([feed, mk('m2', 'activity', at(25), null)], at(50))).toHaveLength(0)
+  })
+
   it('fills the awake time between the end of a feed and the next sleep', () => {
     const events = [mk('eat1', 'eat', at(0), at(20)), mk('s1', 'sleep', at(60), at(120))]
-    const [a] = derivedActivity(events, at(200))
-    expect(derivedActivity(events, at(200))).toHaveLength(1)
+    const [a] = afterFeeds(events, at(200))
+    expect(afterFeeds(events, at(200))).toHaveLength(1)
     expect(a).toMatchObject({
       id: 'auto:eat1',
       type: 'activity',
@@ -43,7 +63,7 @@ describe('derivedActivity', () => {
 
   it('ignores windows under a minute and over four hours', () => {
     const tiny = [mk('e', 'eat', at(0), at(20)), mk('s', 'sleep', at(20) + 30_000, at(80))]
-    expect(derivedActivity(tiny, at(100))).toEqual([])
+    expect(afterFeeds(tiny, at(100))).toEqual([])
 
     const huge = [mk('e', 'eat', at(0), at(20))]
     expect(derivedActivity(huge, at(20 + 5 * 60))).toEqual([]) // 5 hours later
@@ -51,10 +71,10 @@ describe('derivedActivity', () => {
 
   it('ignores windows shorter than five minutes but keeps five', () => {
     const quick = [mk('e', 'eat', at(0), at(20)), mk('s', 'sleep', at(24), at(80))]
-    expect(derivedActivity(quick, at(100))).toEqual([]) // 4 minutes
+    expect(afterFeeds(quick, at(100))).toEqual([]) // 4 minutes
 
     const exact = [mk('e', 'eat', at(0), at(20)), mk('s', 'sleep', at(25), at(80))]
-    expect(derivedActivity(exact, at(100))).toHaveLength(1) // 5 minutes
+    expect(afterFeeds(exact, at(100))).toHaveLength(1) // 5 minutes
   })
 
   it('does not invent an activity while a sleep that started before the feed ended is running', () => {
@@ -65,12 +85,12 @@ describe('derivedActivity', () => {
 
   it('does not invent an activity when a sleep overlaps the end of the feed', () => {
     const events = [mk('eat1', 'eat', at(10), at(30)), mk('s1', 'sleep', at(0), at(60))]
-    expect(derivedActivity(events, at(100))).toEqual([])
+    expect(afterFeeds(events, at(100))).toEqual([])
   })
 
   it('is not blocked by a sleep that finished before the feed', () => {
     const events = [mk('old', 'sleep', at(-180), at(-120)), mk('eat1', 'eat', at(0), at(20))]
-    const [a] = derivedActivity(events, at(50))
+    const [a] = afterFeeds(events, at(50))
     expect(a).toMatchObject({ id: 'auto:eat1', startedAt: at(20), endedAt: null })
   })
 
@@ -80,7 +100,7 @@ describe('derivedActivity', () => {
       mk('manual', 'activity', at(30), at(50)),
       mk('s1', 'sleep', at(60), at(120)),
     ]
-    expect(derivedActivity(events, at(200))).toEqual([])
+    expect(afterFeeds(events, at(200))).toEqual([])
   })
 
   it('is not suppressed by an activity logged outside the window', () => {
@@ -89,7 +109,7 @@ describe('derivedActivity', () => {
       mk('eat1', 'eat', at(0), at(20)),
       mk('s1', 'sleep', at(60), at(120)),
     ]
-    expect(derivedActivity(events, at(200))).toHaveLength(1)
+    expect(afterFeeds(events, at(200))).toHaveLength(1)
   })
 
   it('does nothing while a feed is still running', () => {
@@ -109,6 +129,32 @@ describe('derivedActivity', () => {
     const [a] = derivedActivity([mk('eat1', 'eat', at(0), at(20))], at(40))
     expect(isDerived(a)).toBe(true)
     expect(isDerived(mk('plain-id', 'eat', 0, 1))).toBe(false)
+  })
+})
+
+describe('awake time after a sleep', () => {
+  it('starts a calculated activity when a sleep ends', () => {
+    const events = [mk('s1', 'sleep', at(0), at(60))]
+    const [a] = derivedActivity(events, at(90))
+    expect(a).toMatchObject({ id: 'auto:s1', startedAt: at(60), endedAt: null })
+  })
+
+  it('closes at the next feed', () => {
+    const events = [mk('s1', 'sleep', at(0), at(60)), mk('eat1', 'eat', at(75), at(90))]
+    expect(derivedActivity(events, at(100)).map((a) => [a.id, a.startedAt, a.endedAt])).toEqual([
+      ['auto:s1', at(60), at(75)],
+      ['auto:eat1', at(90), null],
+    ])
+  })
+
+  it('keeps a comment saved on the sleep, and lets a manual activity win', () => {
+    const sleep = { ...mk('s1', 'sleep', at(0), at(60)), details: { activityNote: 'play' } }
+    expect(derivedActivity([sleep], at(90))[0].notes).toBe('play')
+    expect(derivedActivity([sleep, mk('m', 'activity', at(65), null)], at(90))).toEqual([])
+  })
+
+  it('is not created while the sleep is still running', () => {
+    expect(derivedActivity([mk('s1', 'sleep', at(0), null)], at(90))).toEqual([])
   })
 })
 
@@ -161,8 +207,8 @@ describe('breast pump', () => {
       { ...mk('p', 'pump', at(25), at(45)), details: { side: 'both' as const, ml: 100 } },
       mk('s1', 'sleep', at(60), at(120)),
     ]
-    const [a] = derivedActivity(events, at(200))
-    expect(derivedActivity(events, at(200))).toHaveLength(1)
+    const [a] = afterFeeds(events, at(200))
+    expect(afterFeeds(events, at(200))).toHaveLength(1)
     expect(a).toMatchObject({ startedAt: at(20), endedAt: at(60) })
   })
 })

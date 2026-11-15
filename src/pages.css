@@ -34,6 +34,18 @@
   box-shadow: none;
 }
 
+.note-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.note-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
 .date-input {
   display: block;
   width: 100%;
@@ -304,7 +316,7 @@
 }
 
 .event-auto {
-  cursor: default;
+  cursor: pointer;
   opacity: 0.85;
 }
 
@@ -313,8 +325,7 @@
 }
 
 .event-auto .event-icon {
-  background: var(--surface-2);
-  filter: grayscale(1);
+  background: var(--activity-soft);
 }
 
 .event-auto .event-sub {
