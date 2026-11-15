@@ -216,4 +216,64 @@ describe.skipIf(!enabled)('cloud sync against the real Supabase project', () => 
     )
     expect(stores.profileStore.getSnapshot().name).toBe('Test Baby')
   }, 120_000)
+
+  it('syncs milk bags, and which feed used them, with the partner', async () => {
+    // phone A puts a bag in storage
+    const bagId = stores.bagActions.add({
+      pumpedAt: Date.now() - 3_600_000,
+      volumeMl: 120,
+      location: 'freezer',
+    })
+    await waitFor(synced, 'bag to upload')
+    const { data: row } = await sbB.from('milk_bags').select('*').eq('id', bagId).single()
+    expect(row).toMatchObject({ volume_ml: 120, location: 'freezer', discarded_at: null, deleted_at: null })
+
+    // a feed that lists the bag is what marks it used: nothing about use is stored on the bag
+    store.eventStore.add({
+      type: 'eat',
+      startedAt: Date.now() - 600_000,
+      endedAt: Date.now() - 300_000,
+      details: { side: 'bottle', milk: 'pumped', ml: 120, bagIds: [bagId] },
+    })
+    await waitFor(synced, 'feed to upload')
+    const { data: feeds } = await sbB
+      .from('events')
+      .select('details')
+      .eq('baby_id', babyId)
+      .eq('type', 'eat')
+      .is('deleted_at', null)
+    expect(feeds!.some((f) => (f.details.bagIds ?? []).includes(bagId))).toBe(true)
+
+    // throwing a bag away, and putting it back, reach the partner
+    stores.bagActions.discard(bagId, Date.now())
+    await waitFor(synced, 'discard to upload')
+    const thrown = await sbB.from('milk_bags').select('discarded_at').eq('id', bagId).single()
+    expect(thrown.data!.discarded_at).not.toBeNull()
+    stores.bagActions.restore(bagId)
+    await waitFor(synced, 'restore to upload')
+    const restored = await sbB.from('milk_bags').select('discarded_at').eq('id', bagId).single()
+    expect(restored.data!.discarded_at).toBeNull()
+
+    // the partner's bag arrives on this phone
+    const partnerBag = crypto.randomUUID()
+    const { error } = await sbB.from('milk_bags').insert({
+      id: partnerBag,
+      baby_id: babyId,
+      pumped_at: new Date().toISOString(),
+      volume_ml: 90,
+      location: 'fridge',
+    })
+    expect(error).toBeNull()
+    await waitFor(
+      () => stores.bagStore.getSnapshot().some((b) => b.id === partnerBag && b.volumeMl === 90),
+      "partner's bag to arrive",
+      60_000,
+    )
+
+    // removing a bag is a soft delete, so it disappears on the partner's phone too
+    stores.bagActions.remove(bagId)
+    await waitFor(synced, 'delete to upload')
+    const removed = await sbB.from('milk_bags').select('deleted_at').eq('id', bagId).single()
+    expect(removed.data!.deleted_at).not.toBeNull()
+  }, 120_000)
 })
