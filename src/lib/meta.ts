@@ -1,4 +1,4 @@
-import type { EventType, PhaseType } from '../types'
+import type { EventDetails, EventType, PhaseType } from '../types'
 
 export const PHASES: PhaseType[] = ['eat', 'activity', 'sleep', 'you']
 
@@ -29,6 +29,15 @@ export const EVENT_EMOJI: Record<EventType, string> = {
   you: '🧘',
   diaper: '🧷',
   pump: '🥛',
+}
+
+export const BREAST_EMOJI = '🤱'
+export const BOTTLE_EMOJI = '🍼'
+
+/** Eat icon by how the feed happened. Older feeds with ml but no side were bottles. */
+export function eatEmoji(details: Pick<EventDetails, 'side' | 'ml'>): string {
+  const bottle = details.side === 'bottle' || (!details.side && !!details.ml)
+  return bottle ? BOTTLE_EMOJI : BREAST_EMOJI
 }
 
 export const EVENT_LABEL: Record<EventType, string> = {
