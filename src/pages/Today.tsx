@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import PageHead from '../components/PageHead'
 import Chips from '../components/Chips'
@@ -292,16 +291,13 @@ export default function Today() {
         {/* Recent */}
         <section className="card">
           <h2>Today</h2>
-          <EventList
-            events={today.slice(0, 6)}
-            now={now}
-            onSelect={(event) => setSheet({ event })}
-          />
-          {today.length > 6 && (
-            <Link to="/history" className="see-all">
-              See all {today.length} →
-            </Link>
-          )}
+          <div className="events-scroll">
+            <EventList
+              events={today}
+              now={now}
+              onSelect={(event) => setSheet({ event })}
+            />
+          </div>
         </section>
       </div>
 

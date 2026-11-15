@@ -224,6 +224,13 @@
 }
 
 /* ---------- Event list ---------- */
+.events-scroll {
+  max-height: 60dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .events {
   list-style: none;
   margin: 0;

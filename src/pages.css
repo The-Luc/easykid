@@ -35,7 +35,13 @@
 }
 
 .date-input {
+  display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
   min-height: 52px;
   padding: 0 14px;
   border: 1px solid var(--line);
